@@ -2,9 +2,21 @@
 
 ## Overview
 Build a browser-based, collapsible Gantt chart app for tracking a shared project
-timeline (August 2026 – May 2027) used by a team of 5 people. There is no backend
-server and no hosting — the app and its data file live together in a shared
-OneDrive folder, so OneDrive's own sync keeps everyone up to date.
+timeline (August 2026 – May 2027) used by a team of 5 people.
+
+> **Update (architecture pivot):** the original plan below was a no-backend app
+> reading/writing a JSON file in a shared OneDrive folder via the File System
+> Access API, with each person running a local server. The team found running a
+> local server per-person too much friction and wanted "just a website." The app
+> was migrated to Firebase (Firestore for data + Google Sign-In for access,
+> restricted to an email allowlist) hosted on GitHub Pages — a single URL,
+> nothing to run locally, live sync instead of a manual Reload button. See
+> `README.md` for the current setup/run instructions and `firestore.rules` for
+> the access-control rules. The features/UX goals below (collapsible groups,
+> drag-to-resize, dependencies, etc.) are unchanged — only the persistence and
+> hosting model changed. The "Data & Multi-User Access Strategy" and "Tech
+> Stack" sections below describe the *original* OneDrive-file design and are
+> kept for history; they no longer reflect how the app actually persists data.
 
 ## Users
 5 named team members. Ask the user for their actual names before building the

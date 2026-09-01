@@ -1,45 +1,71 @@
 # Team Gantt Chart
 
 A shared, collapsible Gantt chart for a 5-person team, covering August 2026
-through May 2027. No server, no accounts — the app and its data file are meant
-to sit in a shared OneDrive folder, and OneDrive keeps everyone's copy in sync.
+through May 2027. Static site (no build step) backed by Firebase Firestore for
+live-synced data, gated behind Google Sign-In restricted to your team's
+emails. Hosted on GitHub Pages — one URL, nothing to install or run to use it.
 
-## Running it
+## Using it (once it's set up)
 
-The app needs to be served over `http://localhost` rather than opened directly
-as a file (`file://`), because the File System Access API requires a secure
-context.
+Just open the GitHub Pages URL and sign in with Google. Edits sync to
+everyone live — no reload, no save button, no local anything.
 
+## One-time setup
+
+**1. Create the Firebase project** (console.firebase.google.com):
+   - Add project → any name → Google Analytics not needed.
+   - Build → Firestore Database → Create database → any region → **production mode**.
+   - Build → Authentication → Get started → enable the **Google** sign-in provider.
+   - Project settings (gear icon) → Your apps → **`</>`** (Web) → register an app
+     (skip the Firebase Hosting checkbox) → copy the `firebaseConfig` object.
+
+**2. Fill in `src/firebase-config.js`:**
+   - Paste the `firebaseConfig` values in.
+   - Set `ALLOWED_EMAILS` to the Google account email each of the 5 team
+     members will sign in with.
+
+**3. Fill in `firestore.rules`** with the same 5 emails, then paste its
+   contents into Firebase console → Firestore Database → Rules → **Publish**.
+   This is what actually enforces access — `firebase-config.js`'s list is only
+   a client-side convenience for a friendlier "not authorized" message.
+
+**4. Authorize the GitHub Pages domain** for sign-in: Firebase console →
+   Authentication → Settings → Authorized domains → add your
+   `<username>.github.io` domain (Google Sign-In's popup will fail with an
+   `auth/unauthorized-domain` error until this is added).
+
+**5. Enable GitHub Pages** on this repo (Settings → Pages → deploy from the
+   `master` branch, root folder). Push, then visit the Pages URL.
+
+## Local development
+
+To test changes before pushing:
 ```
 node server.js
 ```
+Then open `http://localhost:8080` (add that as an authorized domain too, the
+same way as step 4, if you want sign-in to work locally). No install step —
+`server.js` only uses Node's built-in `http` module; Firebase itself is
+loaded from its CDN as ES modules, so there's still no `npm install` or build
+step anywhere in this project.
 
-Then open the printed `http://localhost:8080` URL (pass a different port as
-an argument, e.g. `node server.js 3000`, if 8080 is taken). No install step —
-`server.js` only uses Node's built-in `http` module.
+## Team members & assignees
 
-## Where the data lives
+Editable any time from the ⚙ Settings panel inside the app (renames the 5
+assignee labels used throughout the chart). "Last edited by" on each task
+comes automatically from whoever is signed in — no separate name to set.
 
-Put this whole project folder inside your shared OneDrive folder, then click
-**"Open Shared Folder…"** in the app and pick that folder. The app reads and
-writes `gantt-data.json` there directly; OneDrive syncs the file to the rest
-of the team. Each save also writes a timestamped `gantt-data.backup-*.json`
-copy (the newest 15 are kept) so a bad overwrite is recoverable.
+## Backup / restore
 
-Browsers without the File System Access API (Firefox, Safari) can still use
-the app via the **Import JSON** / **Export JSON** buttons as a manual
-fallback — export after editing and share the file, import to pick up
-someone else's changes.
+**Export JSON** downloads a full snapshot of the current shared data.
+**Import JSON** replaces *everyone's* data with the contents of a file — used
+for restoring a backup or migrating from the old local-file version of this
+app. It asks for confirmation since it's destructive for the whole team.
 
-## Notes
+## Access control
 
-- Everyone should run the app pointed at the same shared folder. Two people
-  saving at the same moment can still overwrite each other — the save status
-  bar shows who last saved and when, and the rolling backups are the recovery
-  path if that happens.
-- Use **Reload** to pull in a teammate's latest saved changes without
-  restarting the app.
-- Team member names and "your name" (used for the last-edited-by stamp) are
-  editable from the ⚙ Settings panel.
+Only the emails listed in both `src/firebase-config.js` and
+`firestore.rules` can sign in and use the app. To add or remove someone,
+update both files (and re-publish the rules in Firebase console).
 
-See `CLAUDE.md` for the full project brief.
+See `CLAUDE.md` for the full project brief and feature list.

@@ -1,7 +1,5 @@
-import { DAY_WIDTH, RANGE_START, RANGE_END, xToDate, formatISO, parseISO, addDays, daysBetween } from './dates.js';
-import {
-  getTask, updateTask, removeTask, addDependency, removeDependency, STATUS_VALUES,
-} from './state.js';
+import { DAY_WIDTH, RANGE_START, RANGE_END, formatISO, parseISO, addDays, daysBetween } from './dates.js';
+import { getTask, STATUS_VALUES } from './state.js';
 
 // ---------- Drag to move / resize bars ----------
 
@@ -70,7 +68,7 @@ export function attachDragInteractions(chartCol, api) {
       delete barEl.dataset.pendingStart;
       delete barEl.dataset.pendingEnd;
       if (Object.keys(patch).length) {
-        api.mutate((state) => updateTask(state, taskId, patch));
+        api.updateTask(taskId, patch).catch(() => api.toast('Could not save that change.'));
       }
     };
 
@@ -95,15 +93,16 @@ export function populateTaskPanel(refs, api, taskId) {
   if (!task) return;
   refs.taskPanel.dataset.taskId = taskId;
 
-  refs.taskName.value = task.name;
+  if (document.activeElement !== refs.taskName) refs.taskName.value = task.name;
+
   refs.taskStatus.innerHTML = '';
   for (const s of STATUS_VALUES) refs.taskStatus.appendChild(optionEl(s, s.replace('-', ' '), s === task.status));
 
   refs.taskGroup.innerHTML = '';
   for (const g of state.groups) refs.taskGroup.appendChild(optionEl(g.id, g.name, g.id === task.groupId));
 
-  refs.taskStart.value = task.start;
-  refs.taskEnd.value = task.end;
+  if (document.activeElement !== refs.taskStart) refs.taskStart.value = task.start;
+  if (document.activeElement !== refs.taskEnd) refs.taskEnd.value = task.end;
   refs.taskStart.min = formatISO(RANGE_START);
   refs.taskStart.max = formatISO(RANGE_END);
   refs.taskEnd.min = formatISO(RANGE_START);
@@ -140,6 +139,13 @@ export function populateTaskPanel(refs, api, taskId) {
     refs.taskAddDepBtn.disabled = false;
     for (const t of eligible) refs.taskAddDepSelect.appendChild(optionEl(t.id, t.name));
   }
+
+  if (task.updatedBy) {
+    const when = task.updatedAt?.toDate ? task.updatedAt.toDate().toLocaleString() : '';
+    refs.taskUpdatedHint.textContent = `Last edited by ${task.updatedBy}${when ? ' · ' + when : ''}`;
+  } else {
+    refs.taskUpdatedHint.textContent = '';
+  }
 }
 
 function renderDependencyList(refs, api, task) {
@@ -164,9 +170,7 @@ function renderDependencyList(refs, api, task) {
     removeBtn.textContent = '×';
     removeBtn.title = 'Remove dependency';
     removeBtn.addEventListener('click', () => {
-      api.mutate((s) => removeDependency(s, task.id, depId));
-      const fresh = getTask(api.getState(), task.id);
-      if (fresh) populateTaskPanel(refs, api, task.id);
+      api.removeDependency(task.id, depId).catch(() => api.toast('Could not remove that dependency.'));
     });
     li.appendChild(label);
     li.appendChild(removeBtn);
@@ -180,21 +184,19 @@ export function wireTaskPanel(refs, api) {
   refs.taskClose.addEventListener('click', () => closeTaskPanel(refs));
 
   refs.taskName.addEventListener('change', () => {
-    api.mutate((s) => updateTask(s, currentTaskId(), { name: refs.taskName.value.trim() || 'Untitled task' }));
+    api.updateTask(currentTaskId(), { name: refs.taskName.value.trim() || 'Untitled task' });
   });
   refs.taskStatus.addEventListener('change', () => {
-    api.mutate((s) => updateTask(s, currentTaskId(), { status: refs.taskStatus.value }));
+    api.updateTask(currentTaskId(), { status: refs.taskStatus.value });
   });
   refs.taskGroup.addEventListener('change', () => {
-    api.mutate((s) => updateTask(s, currentTaskId(), { groupId: refs.taskGroup.value }));
+    api.updateTask(currentTaskId(), { groupId: refs.taskGroup.value });
   });
   refs.taskStart.addEventListener('change', () => {
-    api.mutate((s) => updateTask(s, currentTaskId(), { start: refs.taskStart.value }));
-    populateTaskPanel(refs, api, currentTaskId());
+    api.updateTask(currentTaskId(), { start: refs.taskStart.value });
   });
   refs.taskEnd.addEventListener('change', () => {
-    api.mutate((s) => updateTask(s, currentTaskId(), { end: refs.taskEnd.value }));
-    populateTaskPanel(refs, api, currentTaskId());
+    api.updateTask(currentTaskId(), { end: refs.taskEnd.value });
   });
   refs.taskAssignees.addEventListener('change', (e) => {
     if (e.target.dataset.action !== 'toggle-assignee') return;
@@ -202,23 +204,17 @@ export function wireTaskPanel(refs, api) {
     const task = getTask(state, currentTaskId());
     const set = new Set(task.assigneeIds);
     if (e.target.checked) set.add(e.target.value); else set.delete(e.target.value);
-    api.mutate((s) => updateTask(s, currentTaskId(), { assigneeIds: [...set] }));
+    api.updateTask(currentTaskId(), { assigneeIds: [...set] });
   });
-  refs.taskAddDepBtn.addEventListener('click', () => {
+  refs.taskAddDepBtn.addEventListener('click', async () => {
     const depId = refs.taskAddDepSelect.value;
     if (!depId) return;
-    const err = addDependency(api.getState(), currentTaskId(), depId);
-    if (err) {
-      api.toast(err);
-      return;
-    }
-    api.rerender();
-    api.scheduleSave();
-    populateTaskPanel(refs, api, currentTaskId());
+    const err = await api.addDependency(currentTaskId(), depId);
+    if (err) api.toast(err);
   });
   refs.taskDelete.addEventListener('click', () => {
     const id = currentTaskId();
-    api.mutate((s) => removeTask(s, id));
+    api.removeTask(id);
     closeTaskPanel(refs);
   });
 }

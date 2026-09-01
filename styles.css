@@ -16,6 +16,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   height: 100%;
@@ -68,7 +69,63 @@ html, body {
   color: var(--ink-soft);
 }
 .save-status[data-kind="error"] { color: var(--today); font-weight: 600; }
-.save-status[data-kind="saving"] { color: var(--accent); }
+.save-status[data-kind="connecting"] { color: var(--accent); }
+.save-status[data-kind="offline"] { color: #f08c00; font-weight: 600; }
+.save-status[data-kind="live"]::before { content: "●"; color: #12b886; margin-right: 5px; }
+
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.user-badge img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-alt);
+}
+
+button.secondary-btn {
+  background: var(--bg-alt);
+}
+
+#authGate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-alt);
+  z-index: 30;
+}
+.auth-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 36px 40px;
+  max-width: 380px;
+  width: 90vw;
+  text-align: center;
+  box-shadow: var(--panel-shadow);
+}
+.auth-card h1 {
+  font-size: 20px;
+  margin: 0 0 10px;
+}
+.auth-card p {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  margin: 0 0 20px;
+}
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px;
+  font-weight: 600;
+}
 
 button {
   font: inherit;
@@ -399,7 +456,6 @@ button.danger-btn:hover { filter: brightness(0.92); }
   display: flex;
   flex-direction: column;
 }
-.panel[hidden] { display: none; }
 
 .panel-header {
   display: flex;

@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// Paste this into Firebase console → Firestore Database → Rules → Publish.
+// Keep the email list here in sync with ALLOWED_EMAILS in src/firebase-config.js —
+// this is the file that actually enforces access; the client-side list is just
+// for showing a friendly "not authorized" message before ever hitting Firestore.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isTeamMember() {
+      return request.auth != null && request.auth.token.email in [
+        'person1@example.com',
+        'person2@example.com',
+        'person3@example.com',
+        'person4@example.com',
+        'person5@example.com'
+      ];
+    }
+
+    match /{document=**} {
+      allow read, write: if isTeamMember();
+    }
+  }
+}

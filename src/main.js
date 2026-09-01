@@ -1,35 +1,38 @@
 import { render } from './render.js';
+import { configIsPlaceholder, signIn, signOutUser, watchAuth } from './firebaseApp.js';
+import { ALLOWED_EMAILS } from './firebase-config.js';
 import {
-  createDefaultState, addGroup, addTask, removeGroup, toggleGroupCollapsed, renameGroup,
-  renameAssignee,
-} from './state.js';
-import {
-  supportsFSAccess, loadDirectoryHandle, saveDirectoryHandle, verifyPermission,
-  pickDirectory, readGanttFile, writeGanttFile, exportJSON, importJSONFile,
-} from './storage.js';
-import { attachDragInteractions, wireTaskPanel, openTaskPanel, closeTaskPanel } from './interactions.js';
+  getMirroredState, subscribe, setActor, ensureSeeded,
+  createGroup, renameGroupDoc, toggleGroupCollapsedDoc, deleteGroupDoc,
+  createTask, updateTaskDoc, deleteTaskDoc, addDependencyDoc, removeDependencyDoc,
+  renameAssigneeDoc, exportJSON, importJSONFile, importState,
+} from './store.js';
+import { attachDragInteractions, wireTaskPanel, openTaskPanel, closeTaskPanel, populateTaskPanel } from './interactions.js';
 
-const USER_NAME_KEY = 'ganttUserName';
-const SAVE_DEBOUNCE_MS = 800;
-
-let state = createDefaultState();
-let dirHandle = null;
-let saveTimer = null;
+let refs;
 let toastTimer = null;
+let unsubscribeStore = null;
+let storeSubscribed = false;
 
 function grabRefs() {
   const byId = (id) => document.getElementById(id);
   return {
+    authGate: byId('authGate'),
+    authMessage: byId('authMessage'),
+    signInBtn: byId('signInBtn'),
+    signOutBtn: byId('signOutBtn'),
+    appRoot: byId('app'),
+
     addGroupBtn: byId('addGroupBtn'),
     addTaskBtn: byId('addTaskBtn'),
-    connectFolderBtn: byId('connectFolderBtn'),
-    reloadBtn: byId('reloadBtn'),
-    saveNowBtn: byId('saveNowBtn'),
+    liveStatus: byId('liveStatus'),
     importBtn: byId('importBtn'),
     importFileInput: byId('importFileInput'),
     exportBtn: byId('exportBtn'),
     settingsBtn: byId('settingsBtn'),
-    saveStatus: byId('saveStatus'),
+    userAvatar: byId('userAvatar'),
+    userName: byId('userName'),
+    topSignOutBtn: byId('topSignOutBtn'),
 
     headerChart: byId('headerChart'),
     sidebarCol: byId('sidebarCol'),
@@ -49,27 +52,17 @@ function grabRefs() {
     taskDepList: byId('taskDepList'),
     taskAddDepSelect: byId('taskAddDepSelect'),
     taskAddDepBtn: byId('taskAddDepBtn'),
+    taskUpdatedHint: byId('taskUpdatedHint'),
     taskDelete: byId('taskDelete'),
 
     settingsPanel: byId('settingsPanel'),
     settingsClose: byId('settingsClose'),
     settingsAssignees: byId('settingsAssignees'),
-    settingsYourName: byId('settingsYourName'),
-    settingsDisconnect: byId('settingsDisconnect'),
-    settingsFolderStatus: byId('settingsFolderStatus'),
+    settingsSignedInAs: byId('settingsSignedInAs'),
+    settingsSignOut: byId('settingsSignOut'),
 
     toast: byId('toast'),
   };
-}
-
-let refs;
-
-function getUserName() {
-  return localStorage.getItem(USER_NAME_KEY) || '';
-}
-
-function setUserName(name) {
-  localStorage.setItem(USER_NAME_KEY, name);
 }
 
 function toast(message) {
@@ -80,142 +73,67 @@ function toast(message) {
 }
 
 function rerender() {
-  render(state, refs);
+  render(getMirroredState(), refs);
 }
 
-function mutate(fn) {
-  fn(state);
-  rerender();
-  scheduleSave();
+function setLiveStatus(kind, text) {
+  refs.liveStatus.dataset.kind = kind;
+  refs.liveStatus.textContent = text;
 }
 
-function setSaveStatus(kind) {
-  const el = refs.saveStatus;
-  el.dataset.kind = kind;
-  if (kind === 'not-connected') el.textContent = 'Not connected — connect a shared folder, or use Export to save manually.';
-  else if (kind === 'unsaved') el.textContent = 'Unsaved changes…';
-  else if (kind === 'saving') el.textContent = 'Saving…';
-  else if (kind === 'saved') {
-    const who = state.meta.lastEditedBy || 'someone';
-    const when = state.meta.lastEditedAt ? new Date(state.meta.lastEditedAt).toLocaleTimeString() : '';
-    el.textContent = `All changes saved — last edit by ${who} at ${when}`;
-  } else if (kind === 'error') el.textContent = 'Save failed — try "Save Now", or use Export as a backup.';
-}
-
-function scheduleSave() {
-  if (!dirHandle) { setSaveStatus('not-connected'); return; }
-  setSaveStatus('unsaved');
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(doSave, SAVE_DEBOUNCE_MS);
-}
-
-async function doSave() {
-  if (!dirHandle) { setSaveStatus('not-connected'); return; }
-  setSaveStatus('saving');
-  state.meta.lastEditedBy = getUserName() || 'Unknown';
-  state.meta.lastEditedAt = new Date().toISOString();
-  try {
-    await writeGanttFile(dirHandle, state);
-    setSaveStatus('saved');
-  } catch (err) {
-    console.error(err);
-    setSaveStatus('error');
-  }
-}
-
-const api = { getState: () => state, mutate, rerender, scheduleSave, toast };
+const api = {
+  getState: getMirroredState,
+  toast,
+  updateTask: updateTaskDoc,
+  removeTask: deleteTaskDoc,
+  addDependency: addDependencyDoc,
+  removeDependency: removeDependencyDoc,
+};
 
 // ---------- Toolbar ----------
 
 function lastGroupId() {
-  if (state.groups.length === 0) {
-    const g = addGroup(state, 'New Group');
-    return g.id;
-  }
+  const state = getMirroredState();
+  if (state.groups.length === 0) return null;
   return [...state.groups].sort((a, b) => a.order - b.order).at(-1).id;
 }
 
 function wireToolbar() {
   refs.addGroupBtn.addEventListener('click', () => {
-    mutate((s) => addGroup(s, 'New Group'));
+    createGroup('New Group').catch(() => toast('Could not add group.'));
   });
 
-  refs.addTaskBtn.addEventListener('click', () => {
-    mutate((s) => addTask(s, lastGroupId()));
+  refs.addTaskBtn.addEventListener('click', async () => {
+    let groupId = lastGroupId();
+    if (!groupId) groupId = await createGroup('New Group').catch(() => null);
+    if (!groupId) { toast('Could not add task.'); return; }
+    createTask(groupId).catch(() => toast('Could not add task.'));
   });
 
-  refs.exportBtn.addEventListener('click', () => exportJSON(state));
+  refs.exportBtn.addEventListener('click', () => exportJSON());
 
   refs.importBtn.addEventListener('click', () => refs.importFileInput.click());
   refs.importFileInput.addEventListener('change', async () => {
     const file = refs.importFileInput.files[0];
     refs.importFileInput.value = '';
     if (!file) return;
+    if (!confirm('This replaces all current groups and tasks for everyone with the contents of that file. Continue?')) return;
     try {
-      state = await importJSONFile(file);
-      rerender();
-      scheduleSave();
-      toast('Imported gantt-data.json.');
+      const parsed = await importJSONFile(file);
+      await importState(parsed);
+      toast('Imported — this replaced the shared data for everyone.');
     } catch {
       toast('Could not read that file as JSON.');
     }
   });
-
-  if (!supportsFSAccess) {
-    refs.connectFolderBtn.hidden = true;
-    refs.reloadBtn.hidden = true;
-    refs.saveNowBtn.hidden = true;
-    setSaveStatus('not-connected');
-  } else {
-    refs.connectFolderBtn.addEventListener('click', handleConnectClick);
-    refs.reloadBtn.addEventListener('click', async () => {
-      if (!dirHandle) return;
-      try {
-        state = await readGanttFile(dirHandle);
-        rerender();
-        toast('Reloaded from shared folder.');
-      } catch {
-        toast('Could not reload — file may be missing or locked.');
-      }
-    });
-    refs.saveNowBtn.addEventListener('click', () => {
-      clearTimeout(saveTimer);
-      doSave();
-    });
-  }
 
   refs.settingsBtn.addEventListener('click', () => openSettingsPanel());
   refs.scrim.addEventListener('click', () => {
     closeTaskPanel(refs);
     closeSettingsPanel();
   });
-}
 
-async function handleConnectClick() {
-  try {
-    if (dirHandle) {
-      const ok = await verifyPermission(dirHandle, 'readwrite');
-      if (!ok) { toast('Permission to the folder was not granted.'); return; }
-    } else {
-      dirHandle = await pickDirectory();
-    }
-    state = await readGanttFile(dirHandle);
-    setConnectedUI(true);
-    rerender();
-    doSave();
-    toast('Connected to shared folder.');
-  } catch (err) {
-    if (err && err.name === 'AbortError') return;
-    console.error(err);
-    toast('Could not connect to that folder.');
-  }
-}
-
-function setConnectedUI(connected) {
-  refs.connectFolderBtn.textContent = connected ? 'Reconnect Folder' : 'Open Shared Folder…';
-  refs.settingsFolderStatus.textContent = connected ? 'Connected to a shared folder.' : 'Not connected to a shared folder.';
-  refs.settingsDisconnect.hidden = !connected;
-  setSaveStatus(connected ? 'saved' : 'not-connected');
+  refs.topSignOutBtn.addEventListener('click', () => signOutUser());
 }
 
 // ---------- Sidebar delegation (groups + opening tasks) ----------
@@ -226,13 +144,13 @@ function wireSidebarDelegation() {
     if (!actionEl) return;
     const action = actionEl.dataset.action;
     if (action === 'toggle-group') {
-      mutate((s) => toggleGroupCollapsed(s, actionEl.dataset.groupId));
+      toggleGroupCollapsedDoc(actionEl.dataset.groupId);
     } else if (action === 'remove-group') {
       if (confirm('Remove this group and all its tasks?')) {
-        mutate((s) => removeGroup(s, actionEl.dataset.groupId));
+        deleteGroupDoc(actionEl.dataset.groupId).catch(() => toast('Could not remove group.'));
       }
     } else if (action === 'add-task-to-group') {
-      mutate((s) => addTask(s, actionEl.dataset.groupId));
+      createTask(actionEl.dataset.groupId).catch(() => toast('Could not add task.'));
     } else if (action === 'open-task') {
       openTaskPanel(refs, api, actionEl.closest('[data-task-id]').dataset.taskId);
     }
@@ -240,14 +158,16 @@ function wireSidebarDelegation() {
 
   refs.sidebarCol.addEventListener('change', (e) => {
     if (e.target.dataset.action === 'rename-group') {
-      mutate((s) => renameGroup(s, e.target.dataset.groupId, e.target.value.trim() || 'Untitled group'));
+      renameGroupDoc(e.target.dataset.groupId, e.target.value.trim() || 'Untitled group')
+        .catch(() => toast('Could not rename group.'));
     }
   });
 }
 
 // ---------- Settings panel ----------
 
-function buildSettingsPanel() {
+function buildSettingsPanel(user) {
+  const state = getMirroredState();
   refs.settingsAssignees.innerHTML = '';
   for (const a of state.assignees) {
     const row = document.createElement('label');
@@ -259,32 +179,19 @@ function buildSettingsPanel() {
     input.type = 'text';
     input.value = a.name;
     input.addEventListener('change', () => {
-      mutate((s) => renameAssignee(s, a.id, input.value.trim() || a.name));
+      renameAssigneeDoc(a.id, input.value.trim() || a.name).catch(() => toast('Could not rename assignee.'));
     });
     row.appendChild(swatch);
     row.appendChild(input);
     refs.settingsAssignees.appendChild(row);
   }
-
-  refs.settingsYourName.innerHTML = '';
-  const blank = document.createElement('option');
-  blank.value = '';
-  blank.textContent = 'Choose your name…';
-  refs.settingsYourName.appendChild(blank);
-  for (const a of state.assignees) {
-    const o = document.createElement('option');
-    o.value = a.name;
-    o.textContent = a.name;
-    if (a.name === getUserName()) o.selected = true;
-    refs.settingsYourName.appendChild(o);
-  }
+  refs.settingsSignedInAs.textContent = user ? `${user.displayName} (${user.email})` : '';
 }
 
-function openSettingsPanel(opts = {}) {
-  buildSettingsPanel();
+function openSettingsPanel() {
+  buildSettingsPanel(currentUser);
   refs.settingsPanel.hidden = false;
   refs.scrim.hidden = false;
-  if (opts.highlightName) refs.settingsYourName.focus();
 }
 
 function closeSettingsPanel() {
@@ -294,57 +201,93 @@ function closeSettingsPanel() {
 
 function wireSettingsPanel() {
   refs.settingsClose.addEventListener('click', closeSettingsPanel);
-  refs.settingsYourName.addEventListener('change', () => {
-    setUserName(refs.settingsYourName.value);
-  });
-  refs.settingsDisconnect.addEventListener('click', async () => {
-    dirHandle = null;
-    await saveDirectoryHandle(null);
-    setConnectedUI(false);
-    toast('Disconnected from shared folder.');
-  });
+  refs.settingsSignOut.addEventListener('click', () => signOutUser());
+}
+
+// ---------- Auth gate ----------
+
+let currentUser = null;
+
+function showAuthGate(message, { showSignIn, showSignOut }) {
+  refs.appRoot.hidden = true;
+  refs.authGate.hidden = false;
+  refs.authMessage.textContent = message;
+  refs.signInBtn.hidden = !showSignIn;
+  refs.signOutBtn.hidden = !showSignOut;
+}
+
+function showApp(user) {
+  refs.authGate.hidden = true;
+  refs.appRoot.hidden = false;
+  refs.userAvatar.src = user.photoURL || '';
+  refs.userAvatar.alt = user.displayName || user.email;
+  refs.userName.textContent = user.displayName || user.email;
+}
+
+async function handleAuthChange(user) {
+  if (!user) {
+    currentUser = null;
+    showAuthGate('Sign in with your Google account to continue.', { showSignIn: true, showSignOut: false });
+    return;
+  }
+  if (!ALLOWED_EMAILS.includes(user.email)) {
+    currentUser = null;
+    showAuthGate(`${user.email} isn't on the team allowlist for this chart. Ask whoever set this up to add you.`, { showSignIn: false, showSignOut: true });
+    return;
+  }
+
+  currentUser = user;
+  setActor(user.displayName || user.email);
+  showApp(user);
+
+  if (!storeSubscribed) {
+    storeSubscribed = true;
+    wireToolbar();
+    wireSidebarDelegation();
+    wireTaskPanel(refs, api);
+    wireSettingsPanel();
+    attachDragInteractions(refs.chartCol, api);
+
+    setLiveStatus('connecting', 'Connecting…');
+    try {
+      await ensureSeeded();
+    } catch {
+      toast('Could not initialize shared data — check Firestore rules.');
+    }
+    unsubscribeStore = subscribe(onStoreChange);
+    window.addEventListener('online', () => setLiveStatus('live', 'Live — synced'));
+    window.addEventListener('offline', () => setLiveStatus('offline', 'Offline — changes will sync once reconnected'));
+  }
+}
+
+function onStoreChange() {
+  setLiveStatus(navigator.onLine ? 'live' : 'offline', navigator.onLine ? 'Live — synced' : 'Offline — changes will sync once reconnected');
+  rerender();
+  if (!refs.taskPanel.hidden && refs.taskPanel.dataset.taskId) {
+    populateTaskPanel(refs, api, refs.taskPanel.dataset.taskId);
+  }
 }
 
 // ---------- Init ----------
 
-async function init() {
+function init() {
   refs = grabRefs();
-  wireToolbar();
-  wireSidebarDelegation();
-  wireTaskPanel(refs, api);
-  wireSettingsPanel();
-  attachDragInteractions(refs.chartCol, api);
 
-  if (supportsFSAccess) {
-    const stored = await loadDirectoryHandle();
-    if (stored) {
-      dirHandle = stored;
-      const granted = await stored.queryPermission({ mode: 'readwrite' }).catch(() => 'denied');
-      if (granted === 'granted') {
-        try {
-          state = await readGanttFile(dirHandle);
-          setConnectedUI(true);
-        } catch {
-          toast('Stored folder could not be read — try reconnecting.');
-          setConnectedUI(false);
-        }
-      } else {
-        setConnectedUI(false);
-        toast('Click "Open Shared Folder…" to reconnect and grant access.');
-      }
-    } else {
-      setSaveStatus('not-connected');
-    }
-  } else {
-    setSaveStatus('not-connected');
+  if (configIsPlaceholder) {
+    showAuthGate('This app isn’t configured yet — src/firebase-config.js still has placeholder values.', { showSignIn: false, showSignOut: false });
+    return;
   }
 
-  rerender();
+  refs.signInBtn.hidden = false;
+  refs.signInBtn.addEventListener('click', () => {
+    signIn().catch((err) => {
+      if (err && err.code === 'auth/popup-closed-by-user') return;
+      toast('Sign-in failed. Please try again.');
+    });
+  });
+  refs.signOutBtn.addEventListener('click', () => signOutUser());
 
-  if (!getUserName()) {
-    toast('Pick your name in Settings so edits are attributed to you.');
-    openSettingsPanel({ highlightName: true });
-  }
+  watchAuth(handleAuthChange);
 }
 
 init();
