@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Team Gantt Chart</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="toolbar">
+      <div class="toolbar-group">
+        <button id="addGroupBtn" type="button">+ Group</button>
+        <button id="addTaskBtn" type="button">+ Task</button>
+      </div>
+      <div class="toolbar-group toolbar-status">
+        <span id="saveStatus" class="save-status" data-kind="not-connected"></span>
+      </div>
+      <div class="toolbar-group">
+        <button id="connectFolderBtn" type="button">Open Shared Folder…</button>
+        <button id="reloadBtn" type="button">Reload</button>
+        <button id="saveNowBtn" type="button">Save Now</button>
+        <span class="toolbar-sep"></span>
+        <button id="importBtn" type="button">Import JSON</button>
+        <input id="importFileInput" type="file" accept="application/json" hidden />
+        <button id="exportBtn" type="button">Export JSON</button>
+        <button id="settingsBtn" type="button" title="Settings" aria-label="Settings">⚙</button>
+      </div>
+    </header>
+
+    <div class="gantt-scroll" id="ganttScroll">
+      <div class="gantt-content">
+        <div class="header-row">
+          <div class="corner-cell">Task</div>
+          <div class="header-chart" id="headerChart"></div>
+        </div>
+        <div class="body-row">
+          <div class="sidebar-col" id="sidebarCol"></div>
+          <div class="chart-wrap">
+            <div class="chart-col" id="chartCol"></div>
+            <svg class="connectors" id="connectorsSvg"></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <aside class="panel" id="taskPanel" hidden aria-label="Task details">
+      <div class="panel-header">
+        <h2>Task details</h2>
+        <button id="taskClose" type="button" class="panel-close" aria-label="Close">×</button>
+      </div>
+      <div class="panel-body">
+        <label class="field">
+          <span>Name</span>
+          <input id="taskName" type="text" />
+        </label>
+        <label class="field">
+          <span>Group</span>
+          <select id="taskGroup"></select>
+        </label>
+        <label class="field">
+          <span>Status</span>
+          <select id="taskStatus"></select>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Start</span>
+            <input id="taskStart" type="date" />
+          </label>
+          <label class="field">
+            <span>End</span>
+            <input id="taskEnd" type="date" />
+          </label>
+        </div>
+        <div class="field">
+          <span>Assignees</span>
+          <div id="taskAssignees" class="assignee-checks"></div>
+        </div>
+        <div class="field">
+          <span>Depends on</span>
+          <ul id="taskDepList" class="dep-list"></ul>
+          <div class="dep-add-row">
+            <select id="taskAddDepSelect"></select>
+            <button id="taskAddDepBtn" type="button">Add</button>
+          </div>
+        </div>
+        <button id="taskDelete" type="button" class="danger-btn">Delete Task</button>
+      </div>
+    </aside>
+
+    <aside class="panel" id="settingsPanel" hidden aria-label="Settings">
+      <div class="panel-header">
+        <h2>Settings</h2>
+        <button id="settingsClose" type="button" class="panel-close" aria-label="Close">×</button>
+      </div>
+      <div class="panel-body">
+        <div class="field">
+          <span>Your name</span>
+          <select id="settingsYourName"></select>
+          <p class="field-hint">Used to stamp "last edited by" when you save.</p>
+        </div>
+        <div class="field">
+          <span>Team members</span>
+          <div id="settingsAssignees" class="settings-assignee-list"></div>
+        </div>
+        <div class="field">
+          <span>Shared folder</span>
+          <p id="settingsFolderStatus" class="field-hint">Not connected to a shared folder.</p>
+          <button id="settingsDisconnect" type="button" class="danger-btn" hidden>Disconnect Folder</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="toast" id="toast" hidden></div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
