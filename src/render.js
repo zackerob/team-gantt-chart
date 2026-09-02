@@ -2,7 +2,7 @@ import {
   RANGE_START, RANGE_END, DAY_WIDTH, dateToX, totalWidth, daysBetween,
   getMonthsInRange, getWeekStarts, isToday, todayInRange, parseISO, addDays, formatShort,
 } from './dates.js';
-import { getAssignee, getTask } from './state.js';
+import { getMember, getTask } from './state.js';
 
 export const TASK_ROW_H = 36;
 export const GROUP_ROW_H = 40;
@@ -138,7 +138,7 @@ function buildTaskRow(state, task, sidebarCol, chartCol, chartTopOffset) {
 
   const badges = el('span', 'assignee-badges');
   for (const aid of task.assigneeIds) {
-    const a = getAssignee(state, aid);
+    const a = getMember(state, aid);
     if (!a) continue;
     const b = el('span', 'badge', { text: initials(a.name), title: a.name });
     b.style.background = a.color;
@@ -172,7 +172,7 @@ function buildTaskRow(state, task, sidebarCol, chartCol, chartTopOffset) {
   const body = el('div', 'bar-body', { 'data-action': 'drag-move', 'data-task-id': task.id });
   const label = el('span', 'bar-label', {
     text: task.assigneeIds.length
-      ? task.assigneeIds.map((id) => getAssignee(state, id)).filter(Boolean).map((a) => initials(a.name)).join(' ')
+      ? task.assigneeIds.map((id) => getMember(state, id)).filter(Boolean).map((a) => initials(a.name)).join(' ')
       : task.name,
   });
   body.appendChild(label);

@@ -1,18 +1,22 @@
 import { render } from './render.js';
 import { configIsPlaceholder, signIn, signOutUser, watchAuth } from './firebaseApp.js';
-import { ALLOWED_EMAILS } from './firebase-config.js';
+import { isAdmin as isAdminOf } from './state.js';
 import {
   getMirroredState, subscribe, setActor, ensureSeeded,
   createGroup, renameGroupDoc, toggleGroupCollapsedDoc, deleteGroupDoc,
   createTask, updateTaskDoc, deleteTaskDoc, addDependencyDoc, removeDependencyDoc,
-  renameAssigneeDoc, exportJSON, importJSONFile, importState,
+  createMember, deleteMemberDoc, setMemberRole, renameMemberDoc, setOwnHourlyRate,
+  createTimeEntry, deleteTimeEntryDoc,
+  exportJSON, importJSONFile, importState,
 } from './store.js';
 import { attachDragInteractions, wireTaskPanel, openTaskPanel, closeTaskPanel, populateTaskPanel } from './interactions.js';
+import { renderTimeCost, wireTimeCost } from './timeTracking.js';
 
 let refs;
 let toastTimer = null;
-let unsubscribeStore = null;
 let storeSubscribed = false;
+let currentUser = null;
+let activeTab = 'gantt';
 
 function grabRefs() {
   const byId = (id) => document.getElementById(id);
@@ -23,6 +27,8 @@ function grabRefs() {
     signOutBtn: byId('signOutBtn'),
     appRoot: byId('app'),
 
+    tabGanttBtn: byId('tabGanttBtn'),
+    tabTimeCostBtn: byId('tabTimeCostBtn'),
     addGroupBtn: byId('addGroupBtn'),
     addTaskBtn: byId('addTaskBtn'),
     liveStatus: byId('liveStatus'),
@@ -34,10 +40,24 @@ function grabRefs() {
     userName: byId('userName'),
     topSignOutBtn: byId('topSignOutBtn'),
 
+    ganttScroll: byId('ganttScroll'),
     headerChart: byId('headerChart'),
     sidebarCol: byId('sidebarCol'),
     chartCol: byId('chartCol'),
     connectorsSvg: byId('connectorsSvg'),
+
+    timeCostView: byId('timeCostView'),
+    tcTotalHours: byId('tcTotalHours'),
+    tcTotalCost: byId('tcTotalCost'),
+    tcBreakdownBody: byId('tcBreakdownBody'),
+    tcEntryForm: byId('tcEntryForm'),
+    tcMember: byId('tcMember'),
+    tcDate: byId('tcDate'),
+    tcTask: byId('tcTask'),
+    tcHours: byId('tcHours'),
+    tcCost: byId('tcCost'),
+    tcNote: byId('tcNote'),
+    tcEntriesBody: byId('tcEntriesBody'),
 
     scrim: byId('scrim'),
 
@@ -57,7 +77,11 @@ function grabRefs() {
 
     settingsPanel: byId('settingsPanel'),
     settingsClose: byId('settingsClose'),
-    settingsAssignees: byId('settingsAssignees'),
+    settingsMembers: byId('settingsMembers'),
+    settingsAddMemberField: byId('settingsAddMemberField'),
+    settingsAddMemberForm: byId('settingsAddMemberForm'),
+    newMemberEmail: byId('newMemberEmail'),
+    newMemberName: byId('newMemberName'),
     settingsSignedInAs: byId('settingsSignedInAs'),
     settingsSignOut: byId('settingsSignOut'),
 
@@ -72,8 +96,17 @@ function toast(message) {
   toastTimer = setTimeout(() => { refs.toast.hidden = true; }, 3500);
 }
 
-function rerender() {
+function amIAdmin() {
+  return currentUser ? isAdminOf(getMirroredState(), currentUser.email) : false;
+}
+
+function rerenderGantt() {
   render(getMirroredState(), refs);
+}
+
+function rerenderTimeCost() {
+  if (!currentUser) return;
+  renderTimeCost(getMirroredState(), refs, currentUser.email, amIAdmin());
 }
 
 function setLiveStatus(kind, text) {
@@ -88,7 +121,28 @@ const api = {
   removeTask: deleteTaskDoc,
   addDependency: addDependencyDoc,
   removeDependency: removeDependencyDoc,
+  createTimeEntry,
+  removeTimeEntry: deleteTimeEntryDoc,
 };
+
+// ---------- Tabs ----------
+
+function setTab(tab) {
+  activeTab = tab;
+  const ganttActive = tab === 'gantt';
+  refs.tabGanttBtn.classList.toggle('active', ganttActive);
+  refs.tabTimeCostBtn.classList.toggle('active', !ganttActive);
+  refs.addGroupBtn.hidden = !ganttActive;
+  refs.addTaskBtn.hidden = !ganttActive;
+  refs.ganttScroll.hidden = !ganttActive;
+  refs.timeCostView.hidden = ganttActive;
+  if (ganttActive) rerenderGantt(); else rerenderTimeCost();
+}
+
+function wireTabs() {
+  refs.tabGanttBtn.addEventListener('click', () => setTab('gantt'));
+  refs.tabTimeCostBtn.addEventListener('click', () => setTab('timecost'));
+}
 
 // ---------- Toolbar ----------
 
@@ -164,32 +218,88 @@ function wireSidebarDelegation() {
   });
 }
 
-// ---------- Settings panel ----------
+// ---------- Settings panel (team member management) ----------
 
-function buildSettingsPanel(user) {
+function buildSettingsPanel() {
   const state = getMirroredState();
-  refs.settingsAssignees.innerHTML = '';
-  for (const a of state.assignees) {
-    const row = document.createElement('label');
-    row.className = 'settings-assignee-row';
+  const iAmAdmin = amIAdmin();
+
+  refs.settingsMembers.innerHTML = '';
+  for (const m of state.members) {
+    const row = document.createElement('div');
+    row.className = 'settings-member-row';
+
     const swatch = document.createElement('span');
     swatch.className = 'swatch';
-    swatch.style.background = a.color;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = a.name;
-    input.addEventListener('change', () => {
-      renameAssigneeDoc(a.id, input.value.trim() || a.name).catch(() => toast('Could not rename assignee.'));
-    });
+    swatch.style.background = m.color;
     row.appendChild(swatch);
-    row.appendChild(input);
-    refs.settingsAssignees.appendChild(row);
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = m.name;
+    nameInput.disabled = !iAmAdmin;
+    nameInput.title = iAmAdmin ? 'Rename this member' : 'Only an admin can rename members';
+    nameInput.addEventListener('change', () => {
+      renameMemberDoc(m.id, nameInput.value.trim() || m.name).catch(() => toast('Could not rename member.'));
+    });
+    row.appendChild(nameInput);
+
+    const rateWrap = document.createElement('span');
+    rateWrap.className = 'rate-wrap';
+    const rateInput = document.createElement('input');
+    rateInput.type = 'number';
+    rateInput.min = '0';
+    rateInput.step = '0.01';
+    rateInput.value = m.hourlyRate || 0;
+    const isSelf = currentUser && m.id === currentUser.email;
+    rateInput.disabled = !isSelf;
+    rateInput.title = isSelf ? 'Your hourly rate' : `${m.name}'s hourly rate (only they can change it)`;
+    rateInput.addEventListener('change', () => {
+      setOwnHourlyRate(m.id, rateInput.value).catch(() => toast('Could not update your rate.'));
+    });
+    rateWrap.appendChild(document.createTextNode('$'));
+    rateWrap.appendChild(rateInput);
+    rateWrap.appendChild(document.createTextNode('/hr'));
+    row.appendChild(rateWrap);
+
+    const roleTag = document.createElement('span');
+    roleTag.className = 'role-tag' + (m.role === 'admin' ? ' admin' : '');
+    roleTag.textContent = m.role === 'admin' ? 'Admin' : 'Member';
+    row.appendChild(roleTag);
+
+    if (iAmAdmin && m.id !== currentUser.email) {
+      const toggleAdminBtn = document.createElement('button');
+      toggleAdminBtn.type = 'button';
+      toggleAdminBtn.className = 'row-icon-btn';
+      toggleAdminBtn.textContent = m.role === 'admin' ? '▾admin' : '▴admin';
+      toggleAdminBtn.title = m.role === 'admin' ? 'Remove admin' : 'Make admin';
+      toggleAdminBtn.addEventListener('click', () => {
+        setMemberRole(m.id, m.role === 'admin' ? 'member' : 'admin').catch(() => toast('Could not change role.'));
+      });
+      row.appendChild(toggleAdminBtn);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'row-icon-btn danger';
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Remove member';
+      removeBtn.addEventListener('click', () => {
+        if (confirm(`Remove ${m.name} (${m.id})? They will no longer be able to sign in.`)) {
+          deleteMemberDoc(m.id).catch(() => toast('Could not remove member.'));
+        }
+      });
+      row.appendChild(removeBtn);
+    }
+
+    refs.settingsMembers.appendChild(row);
   }
-  refs.settingsSignedInAs.textContent = user ? `${user.displayName} (${user.email})` : '';
+
+  refs.settingsAddMemberField.hidden = !iAmAdmin;
+  refs.settingsSignedInAs.textContent = currentUser ? `${currentUser.displayName} (${currentUser.email})` : '';
 }
 
 function openSettingsPanel() {
-  buildSettingsPanel(currentUser);
+  buildSettingsPanel();
   refs.settingsPanel.hidden = false;
   refs.scrim.hidden = false;
 }
@@ -202,11 +312,22 @@ function closeSettingsPanel() {
 function wireSettingsPanel() {
   refs.settingsClose.addEventListener('click', closeSettingsPanel);
   refs.settingsSignOut.addEventListener('click', () => signOutUser());
+  refs.settingsAddMemberForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = refs.newMemberEmail.value.trim().toLowerCase();
+    const name = refs.newMemberName.value.trim();
+    if (!email || !name) return;
+    createMember(email, name)
+      .then(() => {
+        refs.newMemberEmail.value = '';
+        refs.newMemberName.value = '';
+        toast(`Added ${name} — they can sign in with ${email} right away.`);
+      })
+      .catch(() => toast('Could not add member — check you still have admin rights.'));
+  });
 }
 
 // ---------- Auth gate ----------
-
-let currentUser = null;
 
 function showAuthGate(message, { showSignIn, showSignOut }) {
   refs.appRoot.hidden = true;
@@ -230,42 +351,58 @@ async function handleAuthChange(user) {
     showAuthGate('Sign in with your Google account to continue.', { showSignIn: true, showSignOut: false });
     return;
   }
-  if (!ALLOWED_EMAILS.includes(user.email)) {
-    currentUser = null;
-    showAuthGate(`${user.email} isn't on the team allowlist for this chart. Ask whoever set this up to add you.`, { showSignIn: false, showSignOut: true });
-    return;
-  }
 
   currentUser = user;
-  setActor(user.displayName || user.email);
-  showApp(user);
+  setActor(user.displayName || user.email, user.email);
+  showAuthGate('Loading your team’s board…', { showSignIn: false, showSignOut: true });
 
   if (!storeSubscribed) {
     storeSubscribed = true;
+    wireTabs();
     wireToolbar();
     wireSidebarDelegation();
     wireTaskPanel(refs, api);
     wireSettingsPanel();
+    wireTimeCost(refs, api);
     attachDragInteractions(refs.chartCol, api);
 
     setLiveStatus('connecting', 'Connecting…');
-    try {
-      await ensureSeeded();
-    } catch {
-      toast('Could not initialize shared data — check Firestore rules.');
-    }
-    unsubscribeStore = subscribe(onStoreChange);
+
+    subscribe(onStoreChange, handleStoreError);
+    ensureSeeded().catch(() => {}); // no-op if this account can't write yet (not a member) or rows already exist
+
     window.addEventListener('online', () => setLiveStatus('live', 'Live — synced'));
     window.addEventListener('offline', () => setLiveStatus('offline', 'Offline — changes will sync once reconnected'));
   }
 }
 
-function onStoreChange() {
+function notOnTeamMessage() {
+  return `${currentUser.email} isn't on this team's member list yet. Ask an admin to add you from the Settings panel.`;
+}
+
+function handleStoreError(err) {
+  if (err && err.code === 'permission-denied') {
+    showAuthGate(notOnTeamMessage(), { showSignIn: false, showSignOut: true });
+  } else {
+    toast('Connection error — check your internet connection.');
+  }
+}
+
+function onStoreChange(state) {
+  if (state.loaded.members && !state.members.find((m) => currentUser && m.id === currentUser.email)) {
+    showAuthGate(notOnTeamMessage(), { showSignIn: false, showSignOut: true });
+    return;
+  }
+  if (!state.loaded.members) return; // wait for the real answer instead of flashing the gate
+
+  showApp(currentUser);
   setLiveStatus(navigator.onLine ? 'live' : 'offline', navigator.onLine ? 'Live — synced' : 'Offline — changes will sync once reconnected');
-  rerender();
+
+  if (activeTab === 'gantt') rerenderGantt(); else rerenderTimeCost();
   if (!refs.taskPanel.hidden && refs.taskPanel.dataset.taskId) {
     populateTaskPanel(refs, api, refs.taskPanel.dataset.taskId);
   }
+  if (!refs.settingsPanel.hidden) buildSettingsPanel();
 }
 
 // ---------- Init ----------

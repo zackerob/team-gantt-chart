@@ -1,9 +1,10 @@
 # Team Gantt Chart
 
-A shared, collapsible Gantt chart for a 5-person team, covering August 2026
-through May 2027. Static site (no build step) backed by Firebase Firestore for
-live-synced data, gated behind Google Sign-In restricted to your team's
-emails. Hosted on GitHub Pages — one URL, nothing to install or run to use it.
+A shared, collapsible Gantt chart for a team, covering August 2026 through
+May 2027 — plus a Time & Cost tab for logging hours and totaling project
+cost. Static site (no build step) backed by Firebase Firestore for
+live-synced data, gated behind Google Sign-In. Hosted on GitHub Pages — one
+URL, nothing to install or run to use it.
 
 ## Using it (once it's set up)
 
@@ -18,24 +19,41 @@ everyone live — no reload, no save button, no local anything.
    - Build → Authentication → Get started → enable the **Google** sign-in provider.
    - Project settings (gear icon) → Your apps → **`</>`** (Web) → register an app
      (skip the Firebase Hosting checkbox) → copy the `firebaseConfig` object.
+   - If your Google account is on a Workspace/custom domain: go to
+     console.cloud.google.com (same project) → APIs & Services → OAuth
+     consent screen, and make sure **User type is "External"** — otherwise
+     only accounts on your own domain can sign in, blocking teammates on
+     plain Gmail.
 
-**2. Fill in `src/firebase-config.js`:**
-   - Paste the `firebaseConfig` values in.
-   - Set `ALLOWED_EMAILS` to the Google account email each of the 5 team
-     members will sign in with.
+**2. Fill in `src/firebase-config.js`** with the `firebaseConfig` values from
+   step 1.
 
-**3. Fill in `firestore.rules`** with the same 5 emails, then paste its
-   contents into Firebase console → Firestore Database → Rules → **Publish**.
-   This is what actually enforces access — `firebase-config.js`'s list is only
-   a client-side convenience for a friendlier "not authorized" message.
+**3. Publish the security rules.** Paste the contents of `firestore.rules`
+   into Firebase console → Firestore Database → Rules → **Publish** (no
+   editing needed — access is driven entirely by the `members` collection in
+   the database now, not a list in this file).
 
-**4. Authorize the GitHub Pages domain** for sign-in: Firebase console →
+**4. Create the first member by hand** (this is the one step that can't
+   happen through the app itself — the rules require you to already be a
+   member to add members, so the very first one is a bootstrap exception).
+   In Firebase console → Firestore Database → **Data** tab:
+   - Start collection → Collection ID: `members`
+   - Document ID: **your exact Google account email**
+   - Add fields: `name` (string, your name), `color` (string, e.g. `#4C6EF5`),
+     `role` (string, `admin`), `hourlyRate` (number, `0`), `order` (number, `0`)
+   - Save.
+
+   Everyone after you gets added from inside the app (⚙ Settings panel, as
+   an admin) — no more console work needed for the rest of the team.
+
+**5. Authorize the GitHub Pages domain** for sign-in: Firebase console →
    Authentication → Settings → Authorized domains → add your
-   `<username>.github.io` domain (Google Sign-In's popup will fail with an
+   `<username>.github.io` domain (Google Sign-In's popup fails with an
    `auth/unauthorized-domain` error until this is added).
 
-**5. Enable GitHub Pages** on this repo (Settings → Pages → deploy from the
-   `master` branch, root folder). Push, then visit the Pages URL.
+**6. Enable GitHub Pages** on this repo (Settings → Pages → deploy from the
+   `master` branch, root folder) if not already on. Push, then visit the
+   Pages URL and sign in with the email you used in step 4.
 
 ## Local development
 
@@ -44,28 +62,41 @@ To test changes before pushing:
 node server.js
 ```
 Then open `http://localhost:8080` (add that as an authorized domain too, the
-same way as step 4, if you want sign-in to work locally). No install step —
+same way as step 5, if you want sign-in to work locally). No install step —
 `server.js` only uses Node's built-in `http` module; Firebase itself is
-loaded from its CDN as ES modules, so there's still no `npm install` or build
-step anywhere in this project.
+loaded from its CDN as ES modules, so there's still no `npm install` or
+build step anywhere in this project.
 
-## Team members & assignees
+## Team members & access
 
-Editable any time from the ⚙ Settings panel inside the app (renames the 5
-assignee labels used throughout the chart). "Last edited by" on each task
-comes automatically from whoever is signed in — no separate name to set.
+Anyone in the `members` collection can sign in and use the app — that's the
+entire access list, managed from the ⚙ Settings panel:
+- **Admins** can add or remove members, rename them, and grant/revoke admin.
+- **Every member** sets their own hourly rate — nobody else can change it
+  for them, admins included. That rate is used to auto-fill cost when they
+  log time (still editable per entry).
+- "Last edited by" on each task, and "logged by" on time entries, come
+  automatically from whoever is signed in.
+
+To remove your own admin status or delete yourself, have another admin do
+it — the Settings panel deliberately won't let you do either to your own
+account, so you can't accidentally lock yourself out.
+
+## Time & Cost tab
+
+A second tab alongside the Gantt chart. Log hours against a task (or leave
+it general — materials, software, anything not tied to one task), with a
+cost that auto-fills from your hourly rate and is editable per entry. Shows
+running totals: total hours, total cost, and a breakdown by member. Anyone
+can delete their own entries; admins can delete any entry.
 
 ## Backup / restore
 
-**Export JSON** downloads a full snapshot of the current shared data.
-**Import JSON** replaces *everyone's* data with the contents of a file — used
-for restoring a backup or migrating from the old local-file version of this
-app. It asks for confirmation since it's destructive for the whole team.
-
-## Access control
-
-Only the emails listed in both `src/firebase-config.js` and
-`firestore.rules` can sign in and use the app. To add or remove someone,
-update both files (and re-publish the rules in Firebase console).
+**Export JSON** downloads a snapshot of the current shared data (groups,
+tasks, members, time entries). **Import JSON** replaces the groups and tasks
+for *everyone* with the contents of a file (membership isn't touched by
+import — that stays admin-managed) — used for restoring a backup or
+migrating from the old local-file version of this app. It asks for
+confirmation since it's destructive for the whole team.
 
 See `CLAUDE.md` for the full project brief and feature list.

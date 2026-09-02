@@ -18,6 +18,18 @@ timeline (August 2026 – May 2027) used by a team of 5 people.
 > Stack" sections below describe the *original* OneDrive-file design and are
 > kept for history; they no longer reflect how the app actually persists data.
 
+> **Update (members + Time & Cost):** the fixed "5 people" assumption below is
+> gone. Team membership moved into Firestore itself (a `members` collection)
+> and is managed by admins from the app's Settings panel — no more editing
+> code or `firestore.rules` to add someone. This collection also doubles as
+> both the access-control list (who can sign in) and the assignee list (who
+> tasks can be assigned to) — they're the same people, so they're the same
+> data now. Each member sets their own hourly rate (self-service, not
+> admin-set). A second tab, Time & Cost, logs hours (optionally against a
+> task) with a cost that auto-fills from the logger's rate and totals up to a
+> project cost. See `README.md` for the bootstrap step (the very first admin
+> has to be created by hand in the Firebase console, once).
+
 ## Users
 5 named team members. Ask the user for their actual names before building the
 assignee list; use placeholders ("Person 1"–"Person 5") until then, editable

@@ -1,23 +1,62 @@
 rules_version = '2';
 
-// Paste this into Firebase console → Firestore Database → Rules → Publish.
-// Keep the email list here in sync with ALLOWED_EMAILS in src/firebase-config.js —
-// this is the file that actually enforces access; the client-side list is just
-// for showing a friendly "not authorized" message before ever hitting Firestore.
+// Paste this into Firebase console → Firestore Database → Rules → Publish,
+// every time it changes. Access is fully data-driven off the `members`
+// collection now — there's no static email list to keep in sync here.
+//
+// IMPORTANT — bootstrapping: the very first member (an admin) can't be
+// created through the app, because these rules require you to already be a
+// member to create a member. Create that first document by hand once, in
+// Firebase console → Firestore Database → Data tab:
+//   Collection: members
+//   Document ID: <the first admin's exact Google account email>
+//   Fields: name (string), color (string, e.g. "#4C6EF5"), role (string, "admin"),
+//           hourlyRate (number, 0), order (number, 0)
+// After that, admins can add everyone else from the app's Settings panel.
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isTeamMember() {
-      return request.auth != null && request.auth.token.email in [
-        'person1@example.com',
-        'person2@example.com',
-        'person3@example.com',
-        'person4@example.com',
-        'person5@example.com'
-      ];
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isMember() {
+      return signedIn() && exists(/databases/$(database)/documents/members/$(request.auth.token.email));
+    }
+    function myDoc() {
+      return get(/databases/$(database)/documents/members/$(request.auth.token.email)).data;
+    }
+    function isAdmin() {
+      return isMember() && myDoc().role == 'admin';
+    }
+    function isSelf(email) {
+      return signedIn() && request.auth.token.email == email;
+    }
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    match /{document=**} {
-      allow read, write: if isTeamMember();
+    match /members/{email} {
+      allow read: if isMember();
+      allow create, delete: if isAdmin();
+      // Admins manage name/role/color/order for anyone but hourlyRate; each
+      // member can only ever change their own hourlyRate, nothing else.
+      allow update: if (isAdmin() && !changedKeys().hasAny(['hourlyRate']))
+        || (isSelf(email) && changedKeys().hasOnly(['hourlyRate']));
+    }
+
+    match /groups/{groupId} {
+      allow read, write: if isMember();
+    }
+
+    match /tasks/{taskId} {
+      allow read, write: if isMember();
+    }
+
+    match /timeEntries/{entryId} {
+      allow read: if isMember();
+      allow create: if isMember() && request.resource.data.memberEmail is string
+        && (isSelf(request.resource.data.memberEmail) || isAdmin());
+      allow delete: if isMember() && (isSelf(resource.data.memberEmail) || isAdmin());
+      allow update: if false; // entries are add/remove only — delete and re-add to change one
     }
   }
 }

@@ -27,6 +27,9 @@
   <div id="app" hidden>
     <header class="toolbar">
       <div class="toolbar-group">
+        <button id="tabGanttBtn" type="button" class="tab-btn active">Gantt Chart</button>
+        <button id="tabTimeCostBtn" type="button" class="tab-btn">Time &amp; Cost</button>
+        <span class="toolbar-sep"></span>
         <button id="addGroupBtn" type="button">+ Group</button>
         <button id="addTaskBtn" type="button">+ Task</button>
       </div>
@@ -61,6 +64,61 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="time-cost-view" id="timeCostView" hidden>
+      <div class="tc-summary">
+        <div class="tc-stat">
+          <span class="tc-stat-label">Total hours</span>
+          <span class="tc-stat-value" id="tcTotalHours">0</span>
+        </div>
+        <div class="tc-stat">
+          <span class="tc-stat-label">Total project cost</span>
+          <span class="tc-stat-value" id="tcTotalCost">$0</span>
+        </div>
+      </div>
+      <table class="tc-breakdown" id="tcBreakdownTable">
+        <thead><tr><th>Member</th><th>Hours</th><th>Cost</th></tr></thead>
+        <tbody id="tcBreakdownBody"></tbody>
+      </table>
+
+      <form class="tc-entry-form" id="tcEntryForm">
+        <h3>Log time</h3>
+        <div class="field-row">
+          <label class="field">
+            <span>Member</span>
+            <select id="tcMember"></select>
+          </label>
+          <label class="field">
+            <span>Date</span>
+            <input id="tcDate" type="date" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Task (optional)</span>
+          <select id="tcTask"></select>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Hours</span>
+            <input id="tcHours" type="number" min="0" step="0.25" value="0" />
+          </label>
+          <label class="field">
+            <span>Cost</span>
+            <input id="tcCost" type="number" min="0" step="0.01" value="0" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Note (optional)</span>
+          <input id="tcNote" type="text" placeholder="e.g. materials, or what you worked on" />
+        </label>
+        <button type="submit">Add Entry</button>
+      </form>
+
+      <table class="tc-entries">
+        <thead><tr><th>Date</th><th>Member</th><th>Task</th><th>Hours</th><th>Cost</th><th>Note</th><th></th></tr></thead>
+        <tbody id="tcEntriesBody"></tbody>
+      </table>
     </div>
 
     <div class="scrim" id="scrim" hidden></div>
@@ -118,8 +176,17 @@
       <div class="panel-body">
         <div class="field">
           <span>Team members</span>
-          <div id="settingsAssignees" class="settings-assignee-list"></div>
-          <p class="field-hint">Editing a name here relabels that assignee everywhere.</p>
+          <div id="settingsMembers" class="settings-member-list"></div>
+          <p class="field-hint">Your own hourly rate is yours to set — nobody else can change it for you.</p>
+        </div>
+        <div class="field" id="settingsAddMemberField" hidden>
+          <span>Add a member (admin)</span>
+          <form id="settingsAddMemberForm" class="add-member-form">
+            <input id="newMemberEmail" type="email" placeholder="Google account email" required />
+            <input id="newMemberName" type="text" placeholder="Name" required />
+            <button type="submit">Add</button>
+          </form>
+          <p class="field-hint">They'll be able to sign in and use the app as soon as they're added here.</p>
         </div>
         <div class="field">
           <span>Signed in as</span>

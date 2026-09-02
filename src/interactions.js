@@ -109,7 +109,7 @@ export function populateTaskPanel(refs, api, taskId) {
   refs.taskEnd.max = formatISO(RANGE_END);
 
   refs.taskAssignees.innerHTML = '';
-  for (const a of state.assignees) {
+  for (const a of state.members) {
     const label = document.createElement('label');
     label.className = 'assignee-check';
     const cb = document.createElement('input');
