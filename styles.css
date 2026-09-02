@@ -590,12 +590,20 @@ table.tc-breakdown td, table.tc-entries td {
   font-weight: 600;
   color: var(--ink-soft);
 }
-.field input[type="text"], .field input[type="date"], .field select {
+.field input[type="text"], .field input[type="date"], .field input[type="time"], .field select {
   font: inherit;
   padding: 7px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   width: 100%;
+}
+.field textarea {
+  font: inherit;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 100%;
+  resize: vertical;
 }
 .field-hint {
   margin: 0;
@@ -608,6 +616,21 @@ table.tc-breakdown td, table.tc-entries td {
   gap: 10px;
 }
 .field-row .field { flex: 1; }
+
+.task-more {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.task-more summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.task-more[open] summary { margin-bottom: 10px; }
+.task-more .field-row { margin-bottom: 10px; }
+.task-more .field:last-child { margin-bottom: 0; }
 
 .assignee-checks {
   display: flex;

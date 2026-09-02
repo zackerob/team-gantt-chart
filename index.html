@@ -151,6 +151,23 @@
             <input id="taskEnd" type="date" />
           </label>
         </div>
+        <details class="task-more">
+          <summary>Time of day &amp; notes</summary>
+          <div class="field-row">
+            <label class="field">
+              <span>Start time</span>
+              <input id="taskStartTime" type="time" />
+            </label>
+            <label class="field">
+              <span>End time</span>
+              <input id="taskEndTime" type="time" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Description</span>
+            <textarea id="taskDescription" rows="3" placeholder="Notes for this task…"></textarea>
+          </label>
+        </details>
         <div class="field">
           <span>Assignees</span>
           <div id="taskAssignees" class="assignee-checks"></div>

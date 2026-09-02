@@ -108,6 +108,10 @@ export function populateTaskPanel(refs, api, taskId) {
   refs.taskEnd.min = formatISO(RANGE_START);
   refs.taskEnd.max = formatISO(RANGE_END);
 
+  if (document.activeElement !== refs.taskStartTime) refs.taskStartTime.value = task.startTime || '';
+  if (document.activeElement !== refs.taskEndTime) refs.taskEndTime.value = task.endTime || '';
+  if (document.activeElement !== refs.taskDescription) refs.taskDescription.value = task.description || '';
+
   refs.taskAssignees.innerHTML = '';
   for (const a of state.members) {
     const label = document.createElement('label');
@@ -197,6 +201,15 @@ export function wireTaskPanel(refs, api) {
   });
   refs.taskEnd.addEventListener('change', () => {
     api.updateTask(currentTaskId(), { end: refs.taskEnd.value });
+  });
+  refs.taskStartTime.addEventListener('change', () => {
+    api.updateTask(currentTaskId(), { startTime: refs.taskStartTime.value });
+  });
+  refs.taskEndTime.addEventListener('change', () => {
+    api.updateTask(currentTaskId(), { endTime: refs.taskEndTime.value });
+  });
+  refs.taskDescription.addEventListener('change', () => {
+    api.updateTask(currentTaskId(), { description: refs.taskDescription.value });
   });
   refs.taskAssignees.addEventListener('change', (e) => {
     if (e.target.dataset.action !== 'toggle-assignee') return;

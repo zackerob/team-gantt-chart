@@ -175,6 +175,9 @@ export async function createTask(groupId, overrides = {}) {
     name: overrides.name || 'New Task',
     start: overrides.start || formatISO(RANGE_START),
     end: overrides.end || formatISO(addDays(RANGE_START, 4)),
+    startTime: overrides.startTime || '',
+    endTime: overrides.endTime || '',
+    description: overrides.description || '',
     assigneeIds: overrides.assigneeIds || [],
     dependencyIds: overrides.dependencyIds || [],
     status: overrides.status || 'not-started',
@@ -298,6 +301,7 @@ export async function importState(parsed) {
   for (const t of parsed.tasks || []) {
     batch.set(doc(db, 'tasks', t.id), {
       groupId: t.groupId, name: t.name, start: t.start, end: t.end,
+      startTime: t.startTime || '', endTime: t.endTime || '', description: t.description || '',
       assigneeIds: t.assigneeIds || [], dependencyIds: t.dependencyIds || [],
       status: t.status || 'not-started', order: t.order ?? 0,
       updatedBy: actorName, updatedAt: serverTimestamp(),

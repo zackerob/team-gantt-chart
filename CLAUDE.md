@@ -50,6 +50,12 @@ later in a settings panel.
    - Add new tasks and groups.
    - Remove tasks.
    - Edit task name/details.
+   - Each task also has an optional **time-of-day range** (start time / end
+     time, independent of its start/end date) and a free-text **description**
+     for notes. Any of the 5 members can edit these on any task (same
+     permissions as the rest of a task's fields). Both live in a collapsed
+     `<details>` disclosure ("Time of day & notes") inside the task panel so
+     the panel isn't showing them at all times — expand it only when needed.
 
 4. **Due date editing — two ways**
    - Manual: drag the start/end edges of a task's bar directly on the chart to
