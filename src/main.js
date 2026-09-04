@@ -17,6 +17,7 @@ let toastTimer = null;
 let storeSubscribed = false;
 let currentUser = null;
 let activeTab = 'gantt';
+let hideCompleted = localStorage.getItem('ganttHideCompleted') === '1';
 
 function grabRefs() {
   const byId = (id) => document.getElementById(id);
@@ -31,6 +32,8 @@ function grabRefs() {
     tabTimeCostBtn: byId('tabTimeCostBtn'),
     addGroupBtn: byId('addGroupBtn'),
     addTaskBtn: byId('addTaskBtn'),
+    hideCompletedLabel: byId('hideCompletedLabel'),
+    hideCompletedToggle: byId('hideCompletedToggle'),
     liveStatus: byId('liveStatus'),
     importBtn: byId('importBtn'),
     importFileInput: byId('importFileInput'),
@@ -104,7 +107,7 @@ function amIAdmin() {
 }
 
 function rerenderGantt() {
-  render(getMirroredState(), refs);
+  render(getMirroredState(), refs, { hideCompleted });
 }
 
 function rerenderTimeCost() {
@@ -137,6 +140,7 @@ function setTab(tab) {
   refs.tabTimeCostBtn.classList.toggle('active', !ganttActive);
   refs.addGroupBtn.hidden = !ganttActive;
   refs.addTaskBtn.hidden = !ganttActive;
+  refs.hideCompletedLabel.hidden = !ganttActive;
   refs.ganttScroll.hidden = !ganttActive;
   refs.timeCostView.hidden = ganttActive;
   if (ganttActive) rerenderGantt(); else rerenderTimeCost();
@@ -165,6 +169,13 @@ function wireToolbar() {
     if (!groupId) groupId = await createGroup('New Group').catch(() => null);
     if (!groupId) { toast('Could not add task.'); return; }
     createTask(groupId).catch(() => toast('Could not add task.'));
+  });
+
+  refs.hideCompletedToggle.checked = hideCompleted;
+  refs.hideCompletedToggle.addEventListener('change', () => {
+    hideCompleted = refs.hideCompletedToggle.checked;
+    localStorage.setItem('ganttHideCompleted', hideCompleted ? '1' : '0');
+    rerenderGantt();
   });
 
   refs.exportBtn.addEventListener('click', () => exportJSON());

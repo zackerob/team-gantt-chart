@@ -90,7 +90,7 @@ function buildMonthDividers(chartCol) {
   }
 }
 
-function buildGroupRow(state, group, sidebarCol, chartCol) {
+function buildGroupRow(state, group, sidebarCol, chartCol, hiddenCount) {
   const sideRow = el('div', 'row group-row', { 'data-group-id': group.id });
   sideRow.style.height = `${GROUP_ROW_H}px`;
 
@@ -105,6 +105,13 @@ function buildGroupRow(state, group, sidebarCol, chartCol) {
   });
   nameInput.value = group.name;
   sideRow.appendChild(nameInput);
+
+  if (hiddenCount > 0) {
+    const hiddenBadge = el('span', 'hidden-count-badge', {
+      text: `${hiddenCount} done, hidden`, title: `${hiddenCount} completed task${hiddenCount === 1 ? '' : 's'} hidden by "Hide completed"`,
+    });
+    sideRow.appendChild(hiddenBadge);
+  }
 
   const addTaskBtn = el('button', 'row-icon-btn', {
     'data-action': 'add-task-to-group', 'data-group-id': group.id, type: 'button', title: 'Add task to this group',
@@ -163,18 +170,17 @@ function buildTaskRow(state, task, sidebarCol, chartCol, chartTopOffset) {
   const width = Math.max(DAY_WIDTH, (daysBetween(start, end) + 1) * DAY_WIDTH - 2);
   const top = (TASK_ROW_H - BAR_H) / 2;
 
-  const bar = el('div', `bar status-${task.status}`, { 'data-task-id': task.id });
+  const bar = el('div', `bar status-${task.status}`, {
+    'data-task-id': task.id,
+    title: task.description && task.description.trim() ? task.description.trim() : undefined,
+  });
   bar.style.left = `${left}px`;
   bar.style.width = `${width}px`;
   bar.style.top = `${top}px`;
   bar.style.height = `${BAR_H}px`;
 
   const body = el('div', 'bar-body', { 'data-action': 'drag-move', 'data-task-id': task.id });
-  const label = el('span', 'bar-label', {
-    text: task.assigneeIds.length
-      ? task.assigneeIds.map((id) => getMember(state, id)).filter(Boolean).map((a) => initials(a.name)).join(' ')
-      : task.name,
-  });
+  const label = el('span', 'bar-label', { text: task.name });
   body.appendChild(label);
   bar.appendChild(body);
 
@@ -230,7 +236,9 @@ function drawConnectors(svg, state) {
   }
 }
 
-export function render(state, refs) {
+export function render(state, refs, options = {}) {
+  const hideCompleted = !!options.hideCompleted;
+
   taskLayout.clear();
   buildHeader(refs.headerChart);
 
@@ -242,10 +250,14 @@ export function render(state, refs) {
   const groups = [...state.groups].sort((a, b) => a.order - b.order);
   let runningTop = 0;
   for (const group of groups) {
-    buildGroupRow(state, group, refs.sidebarCol, refs.chartCol);
+    const allTasks = state.tasks.filter((t) => t.groupId === group.id);
+    const visibleTasks = hideCompleted ? allTasks.filter((t) => t.status !== 'done') : allTasks;
+    const hiddenCount = allTasks.length - visibleTasks.length;
+
+    buildGroupRow(state, group, refs.sidebarCol, refs.chartCol, hiddenCount);
     runningTop += GROUP_ROW_H;
     if (!group.collapsed) {
-      const tasks = state.tasks.filter((t) => t.groupId === group.id).sort((a, b) => a.order - b.order);
+      const tasks = visibleTasks.sort((a, b) => a.order - b.order);
       for (const task of tasks) {
         buildTaskRow(state, task, refs.sidebarCol, refs.chartCol, runningTop);
         runningTop += TASK_ROW_H;

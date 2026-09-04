@@ -76,6 +76,19 @@ html, body {
   margin: 0 4px;
 }
 
+.hide-completed-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.hide-completed-toggle input {
+  cursor: pointer;
+}
+
 .save-status {
   font-size: 12.5px;
   color: var(--ink-soft);
@@ -307,6 +320,16 @@ button.danger-btn:hover { filter: brightness(0.92); }
   min-width: 0;
 }
 .group-name-input:hover, .group-name-input:focus { background: #fff; outline: 1px solid var(--border); }
+
+.hidden-count-badge {
+  flex: none;
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: #e9ebee;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
 
 .row-icon-btn {
   border: none;
