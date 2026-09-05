@@ -29,6 +29,7 @@
       <div class="toolbar-group">
         <button id="tabGanttBtn" type="button" class="tab-btn active">Gantt Chart</button>
         <button id="tabTimeCostBtn" type="button" class="tab-btn">Time &amp; Cost</button>
+        <button id="tabBudgetBtn" type="button" class="tab-btn">Budget</button>
         <span class="toolbar-sep"></span>
         <button id="addGroupBtn" type="button">+ Group</button>
         <button id="addTaskBtn" type="button">+ Task</button>
@@ -123,6 +124,66 @@
       <table class="tc-entries">
         <thead><tr><th>Date</th><th>Member</th><th>Task</th><th>Hours</th><th>Cost</th><th>Note</th><th></th></tr></thead>
         <tbody id="tcEntriesBody"></tbody>
+      </table>
+    </div>
+
+    <div class="budget-view" id="budgetView" hidden>
+      <div class="budget-table-wrap">
+        <table class="budget-table" id="budgetTable">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th>Planned Income ($)</th><th>Planned Expenses ($)</th><th>Planned Cost/Unit ($)</th>
+              <th>Actual Income ($)</th><th>Actual Expenses ($)</th><th>Actual Cost/Unit ($)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="budgetTableBody"></tbody>
+        </table>
+      </div>
+      <button id="addCategoryBtn" type="button" class="secondary-btn">+ Category</button>
+
+      <div class="budget-summary-row">
+        <div class="tc-stat">
+          <span class="tc-stat-label">Production quantity</span>
+          <input id="budgetProductionQty" type="number" min="0" step="1" class="budget-qty-input" />
+        </div>
+        <div class="tc-stat">
+          <span class="tc-stat-label">Planned cost / unit</span>
+          <span class="tc-stat-value" id="budgetPlannedCostPerUnit">$0.00</span>
+        </div>
+        <div class="tc-stat">
+          <span class="tc-stat-label">Actual cost / unit</span>
+          <span class="tc-stat-value" id="budgetActualCostPerUnit">$0.00</span>
+        </div>
+      </div>
+
+      <form class="tc-entry-form" id="expEntryForm">
+        <h3>Log an expense</h3>
+        <label class="field">
+          <span>Description</span>
+          <input id="expDescription" type="text" placeholder="What was purchased" />
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Amount</span>
+            <input id="expAmount" type="number" min="0" step="0.01" value="0" />
+          </label>
+          <label class="field">
+            <span>Date</span>
+            <input id="expDate" type="date" />
+          </label>
+        </div>
+        <label class="field">
+          <span>Assign to budget item</span>
+          <select id="expBudgetItem"></select>
+        </label>
+        <button type="submit">Add Expense</button>
+      </form>
+
+      <table class="tc-entries">
+        <thead><tr><th>Date</th><th>Description</th><th>Budget item</th><th>Amount</th><th>Logged by</th><th></th></tr></thead>
+        <tbody id="expEntriesBody"></tbody>
       </table>
     </div>
 

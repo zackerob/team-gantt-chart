@@ -2,15 +2,19 @@ import { render } from './render.js';
 import { configIsPlaceholder, signIn, signOutUser, watchAuth } from './firebaseApp.js';
 import { isAdmin as isAdminOf } from './state.js';
 import {
-  getMirroredState, subscribe, setActor, ensureSeeded,
+  getMirroredState, subscribe, setActor, ensureSeeded, ensureBudgetSeeded,
   createGroup, renameGroupDoc, toggleGroupCollapsedDoc, deleteGroupDoc,
   createTask, updateTaskDoc, deleteTaskDoc, addDependencyDoc, removeDependencyDoc,
   createMember, deleteMemberDoc, setMemberRole, renameMemberDoc, setOwnHourlyRate,
   createTimeEntry, deleteTimeEntryDoc,
+  createBudgetCategory, renameBudgetCategoryDoc, deleteBudgetCategoryDoc,
+  createBudgetItem, updateBudgetItemDoc, deleteBudgetItemDoc,
+  createExpense, deleteExpenseDoc, setProductionQuantity,
   exportJSON, importJSONFile, importState,
 } from './store.js';
 import { attachDragInteractions, wireTaskPanel, openTaskPanel, closeTaskPanel, populateTaskPanel } from './interactions.js';
 import { renderTimeCost, wireTimeCost } from './timeTracking.js';
+import { renderBudget, wireBudget } from './budget.js';
 
 let refs;
 let toastTimer = null;
@@ -30,6 +34,7 @@ function grabRefs() {
 
     tabGanttBtn: byId('tabGanttBtn'),
     tabTimeCostBtn: byId('tabTimeCostBtn'),
+    tabBudgetBtn: byId('tabBudgetBtn'),
     addGroupBtn: byId('addGroupBtn'),
     addTaskBtn: byId('addTaskBtn'),
     hideCompletedLabel: byId('hideCompletedLabel'),
@@ -61,6 +66,19 @@ function grabRefs() {
     tcCost: byId('tcCost'),
     tcNote: byId('tcNote'),
     tcEntriesBody: byId('tcEntriesBody'),
+
+    budgetView: byId('budgetView'),
+    budgetTableBody: byId('budgetTableBody'),
+    addCategoryBtn: byId('addCategoryBtn'),
+    budgetProductionQty: byId('budgetProductionQty'),
+    budgetPlannedCostPerUnit: byId('budgetPlannedCostPerUnit'),
+    budgetActualCostPerUnit: byId('budgetActualCostPerUnit'),
+    expEntryForm: byId('expEntryForm'),
+    expDescription: byId('expDescription'),
+    expAmount: byId('expAmount'),
+    expDate: byId('expDate'),
+    expBudgetItem: byId('expBudgetItem'),
+    expEntriesBody: byId('expEntriesBody'),
 
     scrim: byId('scrim'),
 
@@ -115,6 +133,11 @@ function rerenderTimeCost() {
   renderTimeCost(getMirroredState(), refs, currentUser.email, amIAdmin());
 }
 
+function rerenderBudget() {
+  if (!currentUser) return;
+  renderBudget(getMirroredState(), refs, currentUser.email, amIAdmin(), api);
+}
+
 function setLiveStatus(kind, text) {
   refs.liveStatus.dataset.kind = kind;
   refs.liveStatus.textContent = text;
@@ -129,6 +152,15 @@ const api = {
   removeDependency: removeDependencyDoc,
   createTimeEntry,
   removeTimeEntry: deleteTimeEntryDoc,
+  createBudgetCategory,
+  renameBudgetCategory: renameBudgetCategoryDoc,
+  removeBudgetCategory: deleteBudgetCategoryDoc,
+  createBudgetItem,
+  updateBudgetItem: updateBudgetItemDoc,
+  removeBudgetItem: deleteBudgetItemDoc,
+  createExpense,
+  removeExpense: deleteExpenseDoc,
+  setProductionQuantity,
 };
 
 // ---------- Tabs ----------
@@ -136,19 +168,26 @@ const api = {
 function setTab(tab) {
   activeTab = tab;
   const ganttActive = tab === 'gantt';
+  const timeCostActive = tab === 'timecost';
+  const budgetActive = tab === 'budget';
   refs.tabGanttBtn.classList.toggle('active', ganttActive);
-  refs.tabTimeCostBtn.classList.toggle('active', !ganttActive);
+  refs.tabTimeCostBtn.classList.toggle('active', timeCostActive);
+  refs.tabBudgetBtn.classList.toggle('active', budgetActive);
   refs.addGroupBtn.hidden = !ganttActive;
   refs.addTaskBtn.hidden = !ganttActive;
   refs.hideCompletedLabel.hidden = !ganttActive;
   refs.ganttScroll.hidden = !ganttActive;
-  refs.timeCostView.hidden = ganttActive;
-  if (ganttActive) rerenderGantt(); else rerenderTimeCost();
+  refs.timeCostView.hidden = !timeCostActive;
+  refs.budgetView.hidden = !budgetActive;
+  if (ganttActive) rerenderGantt();
+  else if (timeCostActive) rerenderTimeCost();
+  else rerenderBudget();
 }
 
 function wireTabs() {
   refs.tabGanttBtn.addEventListener('click', () => setTab('gantt'));
   refs.tabTimeCostBtn.addEventListener('click', () => setTab('timecost'));
+  refs.tabBudgetBtn.addEventListener('click', () => setTab('budget'));
 }
 
 // ---------- Toolbar ----------
@@ -378,12 +417,14 @@ async function handleAuthChange(user) {
     wireTaskPanel(refs, api);
     wireSettingsPanel();
     wireTimeCost(refs, api);
+    wireBudget(refs, api);
     attachDragInteractions(refs.chartCol, api);
 
     setLiveStatus('connecting', 'Connecting…');
 
     subscribe(onStoreChange, handleStoreError);
     ensureSeeded().catch(() => {}); // no-op if this account can't write yet (not a member) or rows already exist
+    ensureBudgetSeeded().catch(() => {});
 
     window.addEventListener('online', () => setLiveStatus('live', 'Live — synced'));
     window.addEventListener('offline', () => setLiveStatus('offline', 'Offline — changes will sync once reconnected'));
@@ -412,7 +453,9 @@ function onStoreChange(state) {
   showApp(currentUser);
   setLiveStatus(navigator.onLine ? 'live' : 'offline', navigator.onLine ? 'Live — synced' : 'Offline — changes will sync once reconnected');
 
-  if (activeTab === 'gantt') rerenderGantt(); else rerenderTimeCost();
+  if (activeTab === 'gantt') rerenderGantt();
+  else if (activeTab === 'timecost') rerenderTimeCost();
+  else rerenderBudget();
   if (!refs.taskPanel.hidden && refs.taskPanel.dataset.taskId) {
     populateTaskPanel(refs, api, refs.taskPanel.dataset.taskId);
   }
