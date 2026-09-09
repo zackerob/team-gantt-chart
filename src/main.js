@@ -61,6 +61,7 @@ function grabRefs() {
     tcCost: byId('tcCost'),
     tcNote: byId('tcNote'),
     tcEntriesBody: byId('tcEntriesBody'),
+    tcTaskList: byId('tcTaskList'),
 
     scrim: byId('scrim'),
 
@@ -79,6 +80,7 @@ function grabRefs() {
     taskAddDepSelect: byId('taskAddDepSelect'),
     taskAddDepBtn: byId('taskAddDepBtn'),
     taskUpdatedHint: byId('taskUpdatedHint'),
+    taskLoggedSummary: byId('taskLoggedSummary'),
     taskDelete: byId('taskDelete'),
 
     settingsPanel: byId('settingsPanel'),

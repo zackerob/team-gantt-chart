@@ -555,6 +555,95 @@ table.tc-breakdown td, table.tc-entries td {
   font-weight: 600;
 }
 
+.tc-section-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.tc-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.tc-task-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-alt);
+}
+
+.tc-task-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  list-style: none;
+}
+.tc-task-summary::-webkit-details-marker { display: none; }
+.tc-task-summary::after {
+  content: "▾";
+  flex: none;
+  color: var(--ink-soft);
+  transform: rotate(-90deg);
+  transition: transform 0.12s ease;
+}
+.tc-task-item[open] > .tc-task-summary::after {
+  transform: rotate(0deg);
+}
+
+.tc-task-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.tc-task-dates {
+  flex: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.tc-task-hours, .tc-task-cost {
+  flex: none;
+  width: 80px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.tc-task-notes {
+  padding: 4px 14px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+.tc-task-note-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12.5px;
+  padding-top: 8px;
+}
+.tc-task-note-date { flex: none; width: 78px; color: var(--ink-soft); }
+.tc-task-note-member {
+  flex: none;
+  width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-task-note-hours, .tc-task-note-cost { flex: none; width: 56px; text-align: right; color: var(--ink-soft); }
+.tc-task-note-text { flex: 1; min-width: 0; color: var(--ink-soft); }
+.tc-task-note-empty {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 8px 0 4px;
+}
+
 /* ---------- Scrim / panels ---------- */
 
 .scrim {

@@ -36,7 +36,9 @@ export function renderTimeCost(state, refs, currentUserEmail, isAdminUser) {
 
   const prevTask = refs.tcTask.value;
   refs.tcTask.innerHTML = '';
-  refs.tcTask.appendChild(optionEl('', '— General (no specific task) —', !prevTask));
+  const taskPlaceholder = optionEl('', 'Select a task…', !prevTask);
+  taskPlaceholder.disabled = true;
+  refs.tcTask.appendChild(taskPlaceholder);
   for (const t of state.tasks) {
     refs.tcTask.appendChild(optionEl(t.id, t.name, t.id === prevTask));
   }
@@ -70,6 +72,77 @@ export function renderTimeCost(state, refs, currentUserEmail, isAdminUser) {
     }
     refs.tcEntriesBody.appendChild(tr);
   }
+
+  renderTaskBreakdown(state, refs);
+}
+
+function taskNotesOrEmpty(container, entries, state) {
+  if (entries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'tc-task-note-empty';
+    empty.textContent = 'No time logged yet.';
+    container.appendChild(empty);
+    return;
+  }
+  for (const e of entries) {
+    const member = getMember(state, e.memberEmail);
+    const row = document.createElement('div');
+    row.className = 'tc-task-note-row';
+    row.innerHTML = `
+      <span class="tc-task-note-date">${e.date || ''}</span>
+      <span class="tc-task-note-member">${member ? member.name : e.memberEmail}</span>
+      <span class="tc-task-note-hours">${Number(e.hours || 0).toFixed(2)} hrs</span>
+      <span class="tc-task-note-cost">${money(e.cost)}</span>
+      <span class="tc-task-note-text">${e.note ? String(e.note).replace(/</g, '&lt;') : ''}</span>`;
+    container.appendChild(row);
+  }
+}
+
+function appendTaskGroup(container, state, title, dateRange, entries) {
+  const hours = entries.reduce((sum, e) => sum + (Number(e.hours) || 0), 0);
+  const cost = entries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0);
+
+  const details = document.createElement('details');
+  details.className = 'tc-task-item';
+
+  const summary = document.createElement('summary');
+  summary.className = 'tc-task-summary';
+  summary.innerHTML = `
+    <span class="tc-task-name">${title}</span>
+    <span class="tc-task-dates">${dateRange}</span>
+    <span class="tc-task-hours">${hours.toFixed(2)} hrs</span>
+    <span class="tc-task-cost">${money(cost)}</span>`;
+  details.appendChild(summary);
+
+  const notes = document.createElement('div');
+  notes.className = 'tc-task-notes';
+  taskNotesOrEmpty(notes, entries, state);
+  details.appendChild(notes);
+
+  container.appendChild(details);
+}
+
+// Every task, oldest start date first (matching the Gantt chart's own order),
+// each expandable to the individual logged entries behind its totals. Older
+// entries logged before a task was required still need a home, so anything
+// without a taskId is grouped under a trailing "General" bucket.
+function renderTaskBreakdown(state, refs) {
+  const container = refs.tcTaskList;
+  if (!container) return;
+  container.innerHTML = '';
+
+  const byDate = (a, b) => (a.date || '').localeCompare(b.date || '');
+  const tasksByStart = [...state.tasks].sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+
+  for (const t of tasksByStart) {
+    const entries = state.timeEntries.filter((e) => e.taskId === t.id).sort(byDate);
+    appendTaskGroup(container, state, t.name, `${t.start || ''} – ${t.end || ''}`, entries);
+  }
+
+  const untasked = state.timeEntries.filter((e) => !e.taskId).sort(byDate);
+  if (untasked.length) {
+    appendTaskGroup(container, state, 'General (no task)', '', untasked);
+  }
 }
 
 export function wireTimeCost(refs, api) {
@@ -96,9 +169,11 @@ export function wireTimeCost(refs, api) {
     e.preventDefault();
     const memberEmail = refs.tcMember.value;
     if (!memberEmail) { api.toast('Add a team member before logging time.'); return; }
+    const taskId = refs.tcTask.value;
+    if (!taskId) { api.toast('Pick a task before logging time.'); return; }
     api.createTimeEntry({
       memberEmail,
-      taskId: refs.tcTask.value || null,
+      taskId,
       date: refs.tcDate.value || formatISO(new Date()),
       hours: refs.tcHours.value,
       cost: refs.tcCost.value,

@@ -100,8 +100,8 @@
           </label>
         </div>
         <label class="field">
-          <span>Task (optional)</span>
-          <select id="tcTask"></select>
+          <span>Task</span>
+          <select id="tcTask" required></select>
         </label>
         <div class="field-row">
           <label class="field">
@@ -124,6 +124,9 @@
         <thead><tr><th>Date</th><th>Member</th><th>Task</th><th>Hours</th><th>Cost</th><th>Note</th><th></th></tr></thead>
         <tbody id="tcEntriesBody"></tbody>
       </table>
+
+      <h3 class="tc-section-title">Tasks</h3>
+      <div class="tc-task-list" id="tcTaskList"></div>
     </div>
 
     <div class="scrim" id="scrim" hidden></div>
@@ -172,6 +175,10 @@
             <span>Description</span>
             <textarea id="taskDescription" rows="3" placeholder="Notes for this task…"></textarea>
           </label>
+          <div class="field">
+            <span>Logged time &amp; cost</span>
+            <p id="taskLoggedSummary" class="field-hint"></p>
+          </div>
         </details>
         <div class="field">
           <span>Assignees</span>

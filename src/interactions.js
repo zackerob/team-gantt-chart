@@ -112,6 +112,13 @@ export function populateTaskPanel(refs, api, taskId) {
   if (document.activeElement !== refs.taskEndTime) refs.taskEndTime.value = task.endTime || '';
   if (document.activeElement !== refs.taskDescription) refs.taskDescription.value = task.description || '';
 
+  const loggedEntries = (state.timeEntries || []).filter((e) => e.taskId === task.id);
+  const loggedHours = loggedEntries.reduce((sum, e) => sum + (Number(e.hours) || 0), 0);
+  const loggedCost = loggedEntries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0);
+  refs.taskLoggedSummary.textContent = loggedEntries.length
+    ? `${loggedHours.toFixed(2)} hrs logged · $${loggedCost.toFixed(2)} so far — see Time & Cost for details`
+    : 'No time logged yet.';
+
   refs.taskAssignees.innerHTML = '';
   for (const a of state.members) {
     const label = document.createElement('label');
