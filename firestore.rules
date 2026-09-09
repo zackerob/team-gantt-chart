@@ -58,5 +58,28 @@ service cloud.firestore {
       allow delete: if isMember() && (isSelf(resource.data.memberEmail) || isAdmin());
       allow update: if false; // entries are add/remove only — delete and re-add to change one
     }
+
+    match /budgetCategories/{categoryId} {
+      allow read, write: if isMember();
+    }
+
+    match /budgetItems/{itemId} {
+      allow read, write: if isMember();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isMember();
+      allow create: if isMember() && request.resource.data.memberEmail is string
+        && (isSelf(request.resource.data.memberEmail) || isAdmin());
+      allow delete: if isMember() && (isSelf(resource.data.memberEmail) || isAdmin());
+      // Unlike timeEntries, updates are allowed — deleting a budget item/category
+      // reassigns its expenses to "unassigned" (budgetItemId -> null) rather than
+      // deleting the expense record itself.
+      allow update: if isMember();
+    }
+
+    match /budgetMeta/{docId} {
+      allow read, write: if isMember();
+    }
   }
 }

@@ -14,10 +14,18 @@ const membersCol = () => collection(db, 'members');
 const groupsCol = () => collection(db, 'groups');
 const tasksCol = () => collection(db, 'tasks');
 const timeEntriesCol = () => collection(db, 'timeEntries');
+const budgetCategoriesCol = () => collection(db, 'budgetCategories');
+const budgetItemsCol = () => collection(db, 'budgetItems');
+const expensesCol = () => collection(db, 'expenses');
+const budgetMetaRef = () => doc(db, 'budgetMeta', 'summary');
 
 const mirrored = {
   members: [], groups: [], tasks: [], timeEntries: [],
-  loaded: { members: false, groups: false, tasks: false, timeEntries: false },
+  budgetCategories: [], budgetItems: [], expenses: [], budgetMeta: { productionQuantity: 0 },
+  loaded: {
+    members: false, groups: false, tasks: false, timeEntries: false,
+    budgetCategories: false, budgetItems: false, expenses: false, budgetMeta: false,
+  },
 };
 let actorEmail = '';
 let actorName = 'Unknown';
@@ -63,7 +71,29 @@ export function subscribe(onChange, onError) {
     mirrored.loaded.timeEntries = true;
     emit();
   }, fail);
-  return () => { unsubM(); unsubG(); unsubT(); unsubTE(); };
+  const unsubBC = onSnapshot(query(budgetCategoriesCol()), (snap) => {
+    mirrored.budgetCategories = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    mirrored.loaded.budgetCategories = true;
+    emit();
+  }, fail);
+  const unsubBI = onSnapshot(query(budgetItemsCol()), (snap) => {
+    mirrored.budgetItems = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    mirrored.loaded.budgetItems = true;
+    emit();
+  }, fail);
+  const unsubEx = onSnapshot(query(expensesCol()), (snap) => {
+    mirrored.expenses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    mirrored.loaded.expenses = true;
+    emit();
+  }, fail);
+  const unsubBM = onSnapshot(budgetMetaRef(), (snap) => {
+    mirrored.budgetMeta = snap.exists() ? snap.data() : { productionQuantity: 0 };
+    mirrored.loaded.budgetMeta = true;
+    emit();
+  }, fail);
+  return () => { unsubM(); unsubG(); unsubT(); unsubTE(); unsubBC(); unsubBI(); unsubEx(); unsubBM(); };
 }
 
 // Seeds an example group + tasks the first time the board is empty. Never
@@ -94,6 +124,66 @@ export async function ensureSeeded() {
     assigneeIds: [], dependencyIds: [t1.id], status: 'not-started', order: 1,
     updatedBy: 'system', updatedAt: serverTimestamp(),
   });
+  await batch.commit();
+}
+
+// Seeds the budget baseline (categories + line items) from the team's original
+// spreadsheet, the first time budgetCategories is empty. Numbers below are the
+// "Planned" column from that sheet; "Actual" starts at 0 and fills in from
+// logged expenses / manual entry. One deviation from the sheet's layout: "10%
+// Contingency" is its own category rather than nested under "Other Expenses",
+// since here every category total is always a strict sum of its own items
+// (the original sheet's "Other Expenses" bold total didn't include it either
+// — 245 vs. 245+626.3 — so this keeps the same numbers without a special case).
+export async function ensureBudgetSeeded() {
+  const existing = await getDocs(query(budgetCategoriesCol()));
+  if (!existing.empty) return;
+
+  const batch = writeBatch(db);
+  const newItemFields = (categoryId, name, order, overrides = {}) => ({
+    categoryId, name, order,
+    plannedIncome: 0, plannedExpense: 0, plannedCostPerUnit: 0,
+    actualIncome: 0, actualCostPerUnit: 0,
+    ...overrides,
+  });
+  const addCategory = (name, order) => {
+    const ref = doc(budgetCategoriesCol());
+    batch.set(ref, { name, order });
+    return ref.id;
+  };
+  const addItem = (categoryId, name, order, overrides) => {
+    batch.set(doc(budgetItemsCol()), newItemFields(categoryId, name, order, overrides));
+  };
+
+  const donations = addCategory('Donations/Income', 0);
+  addItem(donations, 'Pitt Power Fundraising', 0);
+  addItem(donations, 'Langford Fund', 1, { plannedIncome: 1000 });
+  addItem(donations, 'Others', 2);
+
+  const transportation = addCategory('Transportation', 1);
+  addItem(transportation, 'Food', 0, { plannedExpense: 1680 });
+  addItem(transportation, 'Travel', 1, { plannedExpense: 2107 });
+  addItem(transportation, 'Lodging', 2, { plannedExpense: 881 });
+
+  const materials = addCategory('Materials/Fixtures', 2);
+  addItem(materials, 'Raw Material', 0);
+  addItem(materials, 'Fasteners/Hardware', 1, { plannedExpense: 100 });
+  addItem(materials, 'Tooling/Fixtures', 2, { plannedExpense: 1200 });
+
+  const manufacturing = addCategory('Manufacturing/Prototype', 3);
+  addItem(manufacturing, 'Prototype Materials', 0, { plannedExpense: 50 });
+  addItem(manufacturing, 'Purchased Components', 1);
+  addItem(manufacturing, 'Manufacturing Costs', 2);
+  addItem(manufacturing, 'Shipping', 3);
+
+  const other = addCategory('Other Expenses', 4);
+  addItem(other, 'Miscellaneous', 0);
+  addItem(other, 'Uniforms', 1, { plannedExpense: 245 });
+
+  const contingency = addCategory('Contingency', 5);
+  addItem(contingency, '10% Contingency', 0, { plannedExpense: 626.3 });
+
+  batch.set(budgetMetaRef(), { productionQuantity: 0 }, { merge: true });
   await batch.commit();
 }
 
@@ -257,6 +347,89 @@ export async function createTimeEntry(entry) {
 
 export async function deleteTimeEntryDoc(entryId) {
   await deleteDoc(doc(db, 'timeEntries', entryId));
+}
+
+// --- Budget categories ---
+
+export async function createBudgetCategory(name) {
+  const orders = mirrored.budgetCategories.map((c) => c.order ?? 0);
+  const order = orders.length ? Math.max(...orders) + 1 : 0;
+  const ref = doc(budgetCategoriesCol());
+  await setDoc(ref, { name: name || 'New Category', order });
+  return ref.id;
+}
+
+export async function renameBudgetCategoryDoc(categoryId, name) {
+  await updateDoc(doc(db, 'budgetCategories', categoryId), { name });
+}
+
+export async function deleteBudgetCategoryDoc(categoryId) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'budgetCategories', categoryId));
+
+  const removedItems = mirrored.budgetItems.filter((i) => i.categoryId === categoryId);
+  const removedIds = new Set(removedItems.map((i) => i.id));
+  removedItems.forEach((i) => batch.delete(doc(db, 'budgetItems', i.id)));
+
+  // Expenses logged against a deleted item become "unassigned" rather than
+  // being deleted too — the money was still spent, it just loses its category.
+  mirrored.expenses
+    .filter((e) => removedIds.has(e.budgetItemId))
+    .forEach((e) => batch.update(doc(db, 'expenses', e.id), { budgetItemId: null }));
+
+  await batch.commit();
+}
+
+// --- Budget items ---
+
+export async function createBudgetItem(categoryId, name) {
+  const itemsInCat = mirrored.budgetItems.filter((i) => i.categoryId === categoryId);
+  const order = itemsInCat.length ? Math.max(...itemsInCat.map((i) => i.order ?? 0)) + 1 : 0;
+  const ref = doc(budgetItemsCol());
+  await setDoc(ref, {
+    categoryId, name: name || 'New Item', order,
+    plannedIncome: 0, plannedExpense: 0, plannedCostPerUnit: 0,
+    actualIncome: 0, actualCostPerUnit: 0,
+  });
+  return ref.id;
+}
+
+export async function updateBudgetItemDoc(itemId, patch) {
+  await updateDoc(doc(db, 'budgetItems', itemId), patch);
+}
+
+export async function deleteBudgetItemDoc(itemId) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, 'budgetItems', itemId));
+  mirrored.expenses
+    .filter((e) => e.budgetItemId === itemId)
+    .forEach((e) => batch.update(doc(db, 'expenses', e.id), { budgetItemId: null }));
+  await batch.commit();
+}
+
+// --- Expenses (actual purchases, optionally assigned to a budget item) ---
+
+export async function createExpense(entry) {
+  const ref = doc(expensesCol());
+  await setDoc(ref, {
+    budgetItemId: entry.budgetItemId || null,
+    description: entry.description || '',
+    amount: Number(entry.amount) || 0,
+    date: entry.date,
+    memberEmail: actorEmail,
+    loggedBy: actorName,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteExpenseDoc(expenseId) {
+  await deleteDoc(doc(db, 'expenses', expenseId));
+}
+
+// --- Production summary ---
+
+export async function setProductionQuantity(qty) {
+  await setDoc(budgetMetaRef(), { productionQuantity: Number(qty) || 0 }, { merge: true });
 }
 
 // --- Backup / restore (manual, in addition to Firestore's own durability) ---
