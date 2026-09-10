@@ -60,6 +60,7 @@ function grabRefs() {
     tcBreakdownBody: byId('tcBreakdownBody'),
     tcEntryForm: byId('tcEntryForm'),
     tcMember: byId('tcMember'),
+    tcAllMembersHint: byId('tcAllMembersHint'),
     tcDate: byId('tcDate'),
     tcTask: byId('tcTask'),
     tcHours: byId('tcHours'),

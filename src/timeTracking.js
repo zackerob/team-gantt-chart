@@ -1,8 +1,15 @@
 import { getMember, getTask, totalCost, totalHours, costByMember } from './state.js';
 import { formatISO } from './dates.js';
 
+export const ALL_MEMBERS_VALUE = '__all__';
+
 function money(n) {
   return `$${(Number(n) || 0).toFixed(2)}`;
+}
+
+function syncMemberModeUI(refs, memberEmail) {
+  const allMembers = memberEmail === ALL_MEMBERS_VALUE;
+  if (refs.tcAllMembersHint) refs.tcAllMembersHint.hidden = !allMembers;
 }
 
 function optionEl(value, text, selected) {
@@ -29,10 +36,14 @@ export function renderTimeCost(state, refs, currentUserEmail, isAdminUser) {
   const prevMember = refs.tcMember.value;
   refs.tcMember.innerHTML = '';
   const selectable = isAdminUser ? state.members : state.members.filter((m) => m.id === currentUserEmail);
+  if (isAdminUser && state.members.length > 1) {
+    refs.tcMember.appendChild(optionEl(ALL_MEMBERS_VALUE, 'All Team Members', prevMember === ALL_MEMBERS_VALUE));
+  }
   for (const m of selectable) {
     refs.tcMember.appendChild(optionEl(m.id, m.name, m.id === (prevMember || currentUserEmail)));
   }
   refs.tcMember.disabled = !isAdminUser;
+  syncMemberModeUI(refs, refs.tcMember.value);
 
   const prevTask = refs.tcTask.value;
   refs.tcTask.innerHTML = '';
@@ -150,8 +161,13 @@ export function wireTimeCost(refs, api) {
 
   function suggestedCost() {
     const state = api.getState();
-    const member = getMember(state, refs.tcMember.value);
     const hours = parseFloat(refs.tcHours.value) || 0;
+    if (refs.tcMember.value === ALL_MEMBERS_VALUE) {
+      const rates = state.members.map((m) => Number(m.hourlyRate) || 0);
+      const avgRate = rates.length ? rates.reduce((a, b) => a + b, 0) / rates.length : 0;
+      return (hours * avgRate).toFixed(2);
+    }
+    const member = getMember(state, refs.tcMember.value);
     const rate = member ? Number(member.hourlyRate) || 0 : 0;
     return (hours * rate).toFixed(2);
   }
@@ -162,6 +178,7 @@ export function wireTimeCost(refs, api) {
   });
   refs.tcMember.addEventListener('change', () => {
     costEdited = false;
+    syncMemberModeUI(refs, refs.tcMember.value);
     refs.tcCost.value = suggestedCost();
   });
 
@@ -171,14 +188,32 @@ export function wireTimeCost(refs, api) {
     if (!memberEmail) { api.toast('Add a team member before logging time.'); return; }
     const taskId = refs.tcTask.value;
     if (!taskId) { api.toast('Pick a task before logging time.'); return; }
-    api.createTimeEntry({
-      memberEmail,
-      taskId,
-      date: refs.tcDate.value || formatISO(new Date()),
-      hours: refs.tcHours.value,
-      cost: refs.tcCost.value,
-      note: refs.tcNote.value.trim(),
-    }).catch(() => api.toast('Could not save that entry.'));
+    const date = refs.tcDate.value || formatISO(new Date());
+    const note = refs.tcNote.value.trim();
+
+    if (memberEmail === ALL_MEMBERS_VALUE) {
+      const state = api.getState();
+      const hours = parseFloat(refs.tcHours.value) || 0;
+      const costPerMember = parseFloat(refs.tcCost.value) || 0;
+      Promise.all(state.members.map((m) => api.createTimeEntry({
+        memberEmail: m.id,
+        taskId,
+        date,
+        hours,
+        cost: costPerMember.toFixed(2),
+        note,
+      }))).catch(() => api.toast('Could not save entries for all members.'));
+    } else {
+      api.createTimeEntry({
+        memberEmail,
+        taskId,
+        date,
+        hours: refs.tcHours.value,
+        cost: refs.tcCost.value,
+        note,
+      }).catch(() => api.toast('Could not save that entry.'));
+    }
+
     refs.tcHours.value = '0';
     refs.tcCost.value = '0';
     refs.tcNote.value = '';
