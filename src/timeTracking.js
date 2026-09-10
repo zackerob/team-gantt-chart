@@ -157,29 +157,25 @@ function renderTaskBreakdown(state, refs) {
 }
 
 export function wireTimeCost(refs, api) {
-  let costEdited = false;
-
-  function suggestedCost() {
+  // The Cost field always holds an hourly rate, in both modes — it's
+  // multiplied by hours at submit time, never stored as a running total.
+  // That keeps it correct regardless of the order hours/rate are edited in.
+  function averageMemberRate() {
     const state = api.getState();
-    const hours = parseFloat(refs.tcHours.value) || 0;
-    if (refs.tcMember.value === ALL_MEMBERS_VALUE) {
-      const rates = state.members.map((m) => Number(m.hourlyRate) || 0);
-      const avgRate = rates.length ? rates.reduce((a, b) => a + b, 0) / rates.length : 0;
-      return (hours * avgRate).toFixed(2);
-    }
-    const member = getMember(state, refs.tcMember.value);
-    const rate = member ? Number(member.hourlyRate) || 0 : 0;
-    return (hours * rate).toFixed(2);
+    const rates = state.members.map((m) => Number(m.hourlyRate) || 0);
+    return rates.length ? rates.reduce((a, b) => a + b, 0) / rates.length : 0;
   }
 
-  refs.tcCost.addEventListener('input', () => { costEdited = true; });
-  refs.tcHours.addEventListener('input', () => {
-    if (!costEdited) refs.tcCost.value = suggestedCost();
-  });
+  function memberRate(memberEmail) {
+    const member = getMember(api.getState(), memberEmail);
+    return member ? Number(member.hourlyRate) || 0 : 0;
+  }
+
   refs.tcMember.addEventListener('change', () => {
-    costEdited = false;
     syncMemberModeUI(refs, refs.tcMember.value);
-    refs.tcCost.value = suggestedCost();
+    refs.tcCost.value = (refs.tcMember.value === ALL_MEMBERS_VALUE
+      ? averageMemberRate()
+      : memberRate(refs.tcMember.value)).toFixed(2);
   });
 
   refs.tcEntryForm.addEventListener('submit', (e) => {
@@ -190,11 +186,12 @@ export function wireTimeCost(refs, api) {
     if (!taskId) { api.toast('Pick a task before logging time.'); return; }
     const date = refs.tcDate.value || formatISO(new Date());
     const note = refs.tcNote.value.trim();
+    const hours = parseFloat(refs.tcHours.value) || 0;
+    const hourlyRate = parseFloat(refs.tcCost.value) || 0;
 
     if (memberEmail === ALL_MEMBERS_VALUE) {
       const state = api.getState();
-      const hours = parseFloat(refs.tcHours.value) || 0;
-      const costPerMember = parseFloat(refs.tcCost.value) || 0;
+      const costPerMember = hours * hourlyRate;
       Promise.all(state.members.map((m) => api.createTimeEntry({
         memberEmail: m.id,
         taskId,
@@ -208,16 +205,14 @@ export function wireTimeCost(refs, api) {
         memberEmail,
         taskId,
         date,
-        hours: refs.tcHours.value,
-        cost: refs.tcCost.value,
+        hours,
+        cost: (hours * hourlyRate).toFixed(2),
         note,
       }).catch(() => api.toast('Could not save that entry.'));
     }
 
     refs.tcHours.value = '0';
-    refs.tcCost.value = '0';
     refs.tcNote.value = '';
-    costEdited = false;
   });
 
   refs.tcEntriesBody.addEventListener('click', (e) => {
