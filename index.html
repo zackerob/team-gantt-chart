@@ -65,8 +65,8 @@
         <div class="body-row">
           <div class="sidebar-col" id="sidebarCol"></div>
           <div class="chart-wrap">
-            <div class="chart-col" id="chartCol"></div>
             <svg class="connectors" id="connectorsSvg"></svg>
+            <div class="chart-col" id="chartCol"></div>
           </div>
         </div>
       </div>
@@ -211,6 +211,10 @@
           <span>Status</span>
           <select id="taskStatus"></select>
         </label>
+        <label class="field">
+          <span>Status note</span>
+          <input id="taskStatusNote" type="text" placeholder="e.g. waiting on vendor to confirm" maxlength="140" />
+        </label>
         <div class="field-row">
           <label class="field">
             <span>Start</span>
@@ -239,7 +243,10 @@
           </label>
         </details>
         <div class="field">
-          <span>Assignees</span>
+          <div class="field-header">
+            <span>Assignees</span>
+            <button id="taskAssignAllBtn" type="button" class="link-btn">Assign all</button>
+          </div>
           <div id="taskAssignees" class="assignee-checks"></div>
         </div>
         <div class="field">

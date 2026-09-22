@@ -271,6 +271,7 @@ export async function createTask(groupId, overrides = {}) {
     assigneeIds: overrides.assigneeIds || [],
     dependencyIds: overrides.dependencyIds || [],
     status: overrides.status || 'not-started',
+    statusNote: overrides.statusNote || '',
     order,
     updatedBy: actorName,
     updatedAt: serverTimestamp(),
@@ -476,7 +477,7 @@ export async function importState(parsed) {
       groupId: t.groupId, name: t.name, start: t.start, end: t.end,
       startTime: t.startTime || '', endTime: t.endTime || '', description: t.description || '',
       assigneeIds: t.assigneeIds || [], dependencyIds: t.dependencyIds || [],
-      status: t.status || 'not-started', order: t.order ?? 0,
+      status: t.status || 'not-started', statusNote: t.statusNote || '', order: t.order ?? 0,
       updatedBy: actorName, updatedAt: serverTimestamp(),
     });
   }

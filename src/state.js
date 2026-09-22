@@ -2,7 +2,14 @@
 // Firestore (src/store.js) is the source of truth; these just read/validate that shape.
 
 export const MEMBER_COLORS = ['#4C6EF5', '#F76707', '#12B886', '#E64980', '#FAB005', '#7048E8', '#15AABF', '#82C91E'];
-export const STATUS_VALUES = ['not-started', 'in-progress', 'done', 'blocked'];
+export const STATUS_VALUES = ['not-started', 'in-progress', 'done', 'blocked', 'late'];
+export const STATUS_LABELS = {
+  'not-started': 'Not Started',
+  'in-progress': 'In Progress',
+  done: 'Done',
+  blocked: 'Blocked',
+  late: 'Late',
+};
 
 export function getTask(state, taskId) {
   return state.tasks.find((t) => t.id === taskId) || null;

@@ -1,5 +1,5 @@
 import { DAY_WIDTH, RANGE_START, RANGE_END, formatISO, parseISO, addDays, daysBetween } from './dates.js';
-import { getTask, STATUS_VALUES } from './state.js';
+import { getTask, STATUS_VALUES, STATUS_LABELS } from './state.js';
 
 // ---------- Drag to move / resize bars ----------
 
@@ -96,7 +96,9 @@ export function populateTaskPanel(refs, api, taskId) {
   if (document.activeElement !== refs.taskName) refs.taskName.value = task.name;
 
   refs.taskStatus.innerHTML = '';
-  for (const s of STATUS_VALUES) refs.taskStatus.appendChild(optionEl(s, s.replace('-', ' '), s === task.status));
+  for (const s of STATUS_VALUES) refs.taskStatus.appendChild(optionEl(s, STATUS_LABELS[s], s === task.status));
+
+  if (document.activeElement !== refs.taskStatusNote) refs.taskStatusNote.value = task.statusNote || '';
 
   refs.taskGroup.innerHTML = '';
   for (const g of state.groups) refs.taskGroup.appendChild(optionEl(g.id, g.name, g.id === task.groupId));
@@ -200,6 +202,9 @@ export function wireTaskPanel(refs, api) {
   refs.taskStatus.addEventListener('change', () => {
     api.updateTask(currentTaskId(), { status: refs.taskStatus.value });
   });
+  refs.taskStatusNote.addEventListener('change', () => {
+    api.updateTask(currentTaskId(), { statusNote: refs.taskStatusNote.value.trim() });
+  });
   refs.taskGroup.addEventListener('change', () => {
     api.updateTask(currentTaskId(), { groupId: refs.taskGroup.value });
   });
@@ -225,6 +230,10 @@ export function wireTaskPanel(refs, api) {
     const set = new Set(task.assigneeIds);
     if (e.target.checked) set.add(e.target.value); else set.delete(e.target.value);
     api.updateTask(currentTaskId(), { assigneeIds: [...set] });
+  });
+  refs.taskAssignAllBtn.addEventListener('click', () => {
+    const state = api.getState();
+    api.updateTask(currentTaskId(), { assigneeIds: state.members.map((m) => m.id) });
   });
   refs.taskAddDepBtn.addEventListener('click', async () => {
     const depId = refs.taskAddDepSelect.value;

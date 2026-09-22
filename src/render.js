@@ -9,13 +9,6 @@ export const GROUP_ROW_H = 40;
 export const BAR_H = 24;
 export const SIDEBAR_W = 300;
 
-const STATUS_LABEL = {
-  'not-started': 'Not started',
-  'in-progress': 'In progress',
-  done: 'Done',
-  blocked: 'Blocked',
-};
-
 // taskId -> { top, left, width, height } in chart-col coordinates, refreshed each render.
 export const taskLayout = new Map();
 
@@ -156,6 +149,11 @@ function buildTaskRow(state, task, sidebarCol, chartCol, chartTopOffset) {
   if (hasDependencyConflict(state, task)) {
     const warn = el('span', 'conflict-flag', { text: '⚠', title: 'Starts before a dependency finishes' });
     sideRow.appendChild(warn);
+  }
+
+  if (task.statusNote && task.statusNote.trim()) {
+    const note = el('span', 'status-note-flag', { text: '📝', title: task.statusNote.trim() });
+    sideRow.appendChild(note);
   }
 
   sidebarCol.appendChild(sideRow);

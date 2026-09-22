@@ -362,6 +362,7 @@ button.danger-btn:hover { filter: brightness(0.92); }
 .status-dot.status-in-progress { background: #4c6ef5; }
 .status-dot.status-done { background: #12b886; }
 .status-dot.status-blocked { background: #e03131; }
+.status-dot.status-late { background: #f08c00; }
 
 .task-name {
   flex: 1;
@@ -394,6 +395,12 @@ button.danger-btn:hover { filter: brightness(0.92); }
 .conflict-flag {
   color: #f08c00;
   font-size: 12px;
+}
+
+.status-note-flag {
+  font-size: 11px;
+  flex: none;
+  cursor: default;
 }
 
 .task-chart-row {
@@ -429,6 +436,7 @@ button.danger-btn:hover { filter: brightness(0.92); }
 .bar.status-in-progress { background: #4c6ef5; }
 .bar.status-done { background: #12b886; }
 .bar.status-blocked { background: #e03131; }
+.bar.status-late { background: #f08c00; }
 
 .bar-body {
   position: absolute;
@@ -825,6 +833,30 @@ table.budget-table td:first-child { text-align: left; }
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-soft);
+}
+.field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.field-header span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.link-btn:hover {
+  background: none;
+  text-decoration: underline;
 }
 .field input[type="text"], .field input[type="date"], .field input[type="time"], .field select {
   font: inherit;
